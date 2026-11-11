@@ -1,5 +1,6 @@
 #pragma once
 #include <QSettings>
+#include <algorithm>
 #include "AudioOutput.h"
 
 struct SpectrumConfig
@@ -36,7 +37,17 @@ struct AppConfig
     AudioOutputConfig audio;
     SpectrumConfig spectrum;
     MeterConfig meter;
+    int vizDelayMs = 0;           // ONE delay for level meters and spectrum analyser (sync with the sound)
 
-    void load(QSettings &s) { audio.load(s); spectrum.load(s); meter.load(s); }
-    void save(QSettings &s) const { audio.save(s); spectrum.save(s); meter.save(s); }
+    void load(QSettings &s)
+    {
+        audio.load(s); spectrum.load(s); meter.load(s);
+        const AppConfig d;                  // defaults live here only
+        vizDelayMs = std::clamp(s.value("visualisation/delayMs", d.vizDelayMs).toInt(), 0, 2000);
+    }
+    void save(QSettings &s) const
+    {
+        audio.save(s); spectrum.save(s); meter.save(s);
+        s.setValue("visualisation/delayMs", vizDelayMs);
+    }
 };

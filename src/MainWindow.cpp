@@ -8,6 +8,7 @@
 #include "PreferencesDialog.h"
 #include "SpectrumAnalyzer.h"
 #include "TransportIcons.h"
+#include "VizDelay.h"
 
 #include <QAction>
 #include <QApplication>
@@ -93,8 +94,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     buildUi();
     setAcceptDrops(true);
 
-    connect(m_player, &Player::levels, m_meter, &LevelMeter::setLevels);
-    connect(m_player, &Player::spectrum, m_spectrum, &SpectrumAnalyzer::setSpectrum);
+    // player -> shared delay line -> level meters and spectrum analyser (same delay for both)
+    m_viz = new VizDelay(this);
+    m_viz->setDelayMs(m_cfg.vizDelayMs);
+    connect(m_player, &Player::levels, m_viz, &VizDelay::pushLevels);
+    connect(m_player, &Player::spectrum, m_viz, &VizDelay::pushSpectrum);
+    connect(m_viz, &VizDelay::levels, m_meter, &LevelMeter::setLevels);
+    connect(m_viz, &VizDelay::spectrum, m_spectrum, &SpectrumAnalyzer::setSpectrum);
     connect(m_player, &Player::stateChanged, this, &MainWindow::onStateChanged);
     connect(m_player, &Player::outputProblem, this, [this](const QString &m) {
         statusBar()->showMessage(m, 12000);
@@ -434,6 +440,7 @@ void MainWindow::applyConfig(const AppConfig &c)
     m_cfg.save(s);
     m_meter->setConfig(c.meter);
     m_spectrum->setConfig(c.spectrum);
+    m_viz->setDelayMs(c.vizDelayMs);
     m_player->setSpectrumBands(c.spectrum.fftBands);
     m_player->setTruePeak(c.meter.truePeak);
     if (audioChanged) m_player->setOutput(c.audio);       // keeps the playing position
@@ -708,6 +715,7 @@ void MainWindow::playFrom(PlaylistWidget *w, int proxyRow)
     if (m_playing && m_playing != w) m_playing->model()->setCurrent(-1);
     m_playing = w;
     w->model()->setCurrent(src.row());
+    m_viz->clear();                                   // nothing of the previous track may show up late
     m_player->play(w->model()->urlAt(src.row()));
     w->view()->scrollTo(pidx);
     updateTabIcons();
@@ -786,6 +794,7 @@ void MainWindow::onStateChanged(Player::State s)
     m_btnPause->setChecked(s == Player::Paused);
     if (m_mpris) m_mpris->setState(s);
     if (s == Player::Stopped) {
+        m_viz->clear();
         m_meter->reset();
         m_spectrum->reset();
         m_seek->setRange(0, 0);

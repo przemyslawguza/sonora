@@ -151,11 +151,25 @@ PreferencesDialog::PreferencesDialog(const AppConfig &cfg, QWidget *parent) : QD
                            "red above 0 dB (also for inter-sample overs when true-peak detection is on). "
                            "A single LED marks the peak hold; overs are held longer.")));
 
+    // ------------------------------------------------ Synchronisation (shared by meters + spectrum)
+    m_vizDelay = mkSpin(0, 2000, 10, tr(" ms"));
+    m_vizDelay->setSpecialValueText(tr("no delay"));
+    m_vizDelay->setToolTip(tr("Applied to the level meters and the spectrum analyser together."));
+    auto *viz = new QWidget;
+    auto *vizForm = new QFormLayout(viz);
+    vizForm->addRow(tr("Delay of level meters and spectrum analyser:"), m_vizDelay);
+    vizForm->addRow(note(tr("The analysis sees the audio before the sound card plays it, so without a delay the "
+                            "pictures run ahead of what you hear (the output buffer adds roughly 50 – 300 ms, "
+                            "Bluetooth speakers much more). One delay is used for both displays, so they always "
+                            "stay in step with each other. Start with 100 – 200 ms and adjust until the "
+                            "meters match the beat.")));
+
     auto *tabs = new QTabWidget;
     tabs->addTab(out, tr("Audio output"));
     tabs->addTab(adv, tr("Audio advanced"));
     tabs->addTab(sp, tr("Spectrum"));
     tabs->addTab(me, tr("Level meters"));
+    tabs->addTab(viz, tr("Synchronisation"));
 
     auto *box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Apply |
                                      QDialogButtonBox::Cancel | QDialogButtonBox::RestoreDefaults);
@@ -229,6 +243,8 @@ void PreferencesDialog::setConfig(const AppConfig &cfg)
     m_mScale->setChecked(m.showScale);
     m_mTrue->setChecked(m.truePeak);
 
+    m_vizDelay->setValue(cfg.vizDelayMs);
+
     updateEnabled();
 }
 
@@ -258,6 +274,7 @@ AppConfig PreferencesDialog::config() const
     a.meter.showScale = m_mScale->isChecked();
     a.meter.truePeak = m_mTrue->isChecked();
     a.meter.sanitize();
+    a.vizDelayMs = m_vizDelay->value();
     return a;
 }
 

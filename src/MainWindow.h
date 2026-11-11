@@ -17,6 +17,7 @@ class LevelMeter;
 class SpectrumAnalyzer;
 class PlaylistWidget;
 class MprisService;
+class VizDelay;
 
 class MainWindow : public QMainWindow
 {
@@ -78,6 +79,7 @@ private:
 
     Player *m_player;
     MprisService *m_mpris = nullptr;
+    VizDelay *m_viz = nullptr;              // shared delay of meters + spectrum
     LevelMeter *m_meter;
     SpectrumAnalyzer *m_spectrum;
     QTabWidget *m_tabs = nullptr;

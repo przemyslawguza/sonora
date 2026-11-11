@@ -23,6 +23,7 @@ add_executable(sonora
   src/PreferencesDialog.cpp src/PreferencesDialog.h
   src/Config.cpp           src/Config.h
   src/Mpris.cpp            src/Mpris.h
+  src/VizDelay.cpp         src/VizDelay.h
   src/TrackInfo.h          src/TransportIcons.h)
 target_compile_definitions(sonora PRIVATE SONORA_VERSION="${PROJECT_VERSION}")
 target_link_libraries(sonora PRIVATE Qt6::Widgets Qt6::DBus PkgConfig::GST)

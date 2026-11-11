@@ -42,4 +42,6 @@ private:
     QSpinBox *m_mMin, *m_mMax, *m_mWidth;
     QDoubleSpinBox *m_mStep;
     QCheckBox *m_mScale, *m_mTrue;
+    // visualisation
+    QSpinBox *m_vizDelay;
 };
