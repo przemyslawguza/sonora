@@ -16,7 +16,7 @@ Audacious-style audio player (Qt 6 + GStreamer, C++17).
   drag tabs to reorder, right-click a tab or an item for more (e.g. *Copy selected to playlist*).
   File > Import/Export playlist (M3U). All playlists, names, order and the active tab are restored on start.
   The tab of the playlist that is currently playing shows a play icon; you can browse other tabs meanwhile.
-* **Per-channel level meter** on the left: peak bar, RMS strip, peak-hold; scale -90 dB ... +3 dB.
+* **Per-channel level meter** on the left: peak bar, RMS strip, peak-hold; range configurable (default -60 ... +1 dB).
   The bar count follows the stream (mono, stereo, surround).
 * **Spectrum analyser**, visible by default (View > Spectrum analyser to hide): 56 log-spaced bars,
   ~30 Hz - 20 kHz, peak caps.
@@ -26,15 +26,31 @@ Audacious-style audio player (Qt 6 + GStreamer, C++17).
 * Drag & drop files/folders (added to the visible playlist), `sonora file-or-dir ...` on the command line.
 
 
-## What's new in 0.3.3
+## Defaults
+
+All defaults are defined in one place, `src/Config.h` (`load()` in `Config.cpp` falls back to them, and the
+Preferences texts are generated from them).
+
+| Setting | Default |
+|---|---|
+| Spectrum analyser | 0 - 22 kHz linear, 224 bars, 4096 FFT bands, display -60 ... -20 dB |
+| Level meters | -60 ... +1 dB, 0.33 dB per LED (about 186 LEDs), 10 px per channel, true-peak on |
+
+Saved user settings override defaults: delete `~/.config/sonora/` to see new defaults.
+
+## Features
 
 * **Sound service** (File > Preferences > *Audio output*): Automatic, PipeWire, PulseAudio, ALSA, JACK, OSS ...
   (only installed ones are listed), output device per service, test tone. *Audio advanced*: buffer / latency time
   and a custom GStreamer sink (e.g. `alsasink device=hw:1,0`). Changing the output while playing keeps the position.
-* **Spectrum analyser**: default **0 - 24 kHz**, **112 bars** (2x) and **2048 FFT bands** (2x precision); frequency range,
-  linear/log axis, bar count, dB range and FFT size are configurable (Preferences > *Spectrum*).
-* **LED level meters**: narrow LED ladder (green, yellow, orange, red above 0 dB, peak-hold LED); range, width per
-  channel, dB per LED and the scale are configurable (Preferences > *Level meters*).
+* **Spectrum analyser**: frequency range, linear/log axis, bar count, dB range and FFT size are configurable
+  (Preferences > *Spectrum*); the FFT size takes effect from the next track.
+* **LED level meters**: narrow LED ladder (green, yellow, orange, red above 0 dB, peak-hold LED, overs held 3 s);
+  range, width per channel, dB per LED and the scale are configurable (Preferences > *Level meters*). The LED grid is
+  anchored at 0 dB, so a red LED starting at exactly 0 dB exists for any LED step.
+* **True-peak (inter-sample) metering**: the meter measures a copy of the signal oversampled to 192 kHz (at least 4x
+  for 44.1/48 kHz material, as in ITU-R BS.1770), so the red LED lights when the waveform between two samples goes
+  above 0 dB. Switch in Preferences > Level meters.
 * **Playlist columns**: title, artist, album, year, time, file type; right-click the header to show/hide columns,
   click it to sort (asc / desc / original). The filter also matches artist, album and year.
 * **Metadata tooltip** when the mouse rests on a track: artist, album artist, album, year, track/disc, genre, composer,
@@ -47,6 +63,10 @@ Audacious-style audio player (Qt 6 + GStreamer, C++17).
   the keyboard's **Play/Pause, Stop, Next, Previous** keys work while the window is focused, and - through MPRIS2 over
   D-Bus - also system-wide when the window is in the background (GNOME, KDE, ...). Typing in the filter box is not
   affected.
+* **Fast start**: the window is painted first; GStreamer initialises in a parallel thread, the playback pipeline (and
+  the chosen sound service / device) is created when the first track starts, restoring playlists does not touch the
+  disk up front, and background tag reading starts ~1.5 s after the window is up (at most 4 files in flight).
+  `SONORA_PROFILE=1 sonora` prints start-up timings.
 
 ## Build
 

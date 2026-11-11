@@ -15,14 +15,15 @@ void SpectrumConfig::sanitize()
 
 void SpectrumConfig::load(QSettings &s)
 {
+    const SpectrumConfig d;                 // defaults live in Config.h only
     s.beginGroup("spectrum");
-    bars     = s.value("bars", 112).toInt();
-    fMinHz   = s.value("fMinHz", 0.0).toDouble();
-    fMaxHz   = s.value("fMaxHz", 24000.0).toDouble();
-    logScale = s.value("log", false).toBool();
-    floorDb  = s.value("floorDb", -80).toInt();
-    ceilDb   = s.value("ceilDb", -10).toInt();
-    fftBands = s.value("fftBands", 2048).toInt();
+    bars     = s.value("bars", d.bars).toInt();
+    fMinHz   = s.value("fMinHz", d.fMinHz).toDouble();
+    fMaxHz   = s.value("fMaxHz", d.fMaxHz).toDouble();
+    logScale = s.value("log", d.logScale).toBool();
+    floorDb  = s.value("floorDb", d.floorDb).toInt();
+    ceilDb   = s.value("ceilDb", d.ceilDb).toInt();
+    fftBands = s.value("fftBands", d.fftBands).toInt();
     s.endGroup();
     sanitize();
 }
@@ -50,13 +51,14 @@ void MeterConfig::sanitize()
 
 void MeterConfig::load(QSettings &s)
 {
+    const MeterConfig d;                    // defaults live in Config.h only
     s.beginGroup("meter");
-    minDb     = s.value("minDb", -90.0).toDouble();
-    maxDb     = s.value("maxDb", 3.0).toDouble();
-    barWidth  = s.value("barWidth", 10).toInt();
-    ledStepDb = s.value("ledStep", 0.75).toDouble();     // new key: old integer setting is not reused
-    showScale = s.value("showScale", true).toBool();
-    truePeak  = s.value("truePeak", true).toBool();
+    minDb     = s.value("minDb", d.minDb).toDouble();
+    maxDb     = s.value("maxDb", d.maxDb).toDouble();
+    barWidth  = s.value("barWidth", d.barWidth).toInt();
+    ledStepDb = s.value("ledStep", d.ledStepDb).toDouble();
+    showScale = s.value("showScale", d.showScale).toBool();
+    truePeak  = s.value("truePeak", d.truePeak).toBool();
     s.endGroup();
     sanitize();
 }

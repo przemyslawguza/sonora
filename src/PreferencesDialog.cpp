@@ -117,9 +117,12 @@ PreferencesDialog::PreferencesDialog(const AppConfig &cfg, QWidget *parent) : QD
     spForm->addRow(tr("Bottom of display:"), m_spFloor);
     spForm->addRow(tr("Top of display:"), m_spCeil);
     spForm->addRow(tr("FFT resolution:"), m_spFft);
-    spForm->addRow(note(tr("Default: 0 – 22 kHz, 224 bars, 2048 FFT bands. Content above half of the file's "
-                           "sample rate does not exist, so with 44.1 kHz material the top of a 22 kHz axis "
-                           "stays empty. The FFT resolution takes effect from the next track.")));
+    const SpectrumConfig sd;                // text always shows the real defaults
+    spForm->addRow(note(tr("Default: %1 – %2 kHz, %3 bars, %4 FFT bands. Content above half of the file's "
+                           "sample rate does not exist, so with 44.1 kHz material everything above 22.05 kHz "
+                           "stays empty. The FFT resolution takes effect from the next track.")
+                        .arg(sd.fMinHz / 1000.0, 0, 'g', 3).arg(sd.fMaxHz / 1000.0, 0, 'g', 3)
+                        .arg(sd.bars).arg(sd.fftBands)));
 
     // ------------------------------------------------ Level meters
     m_mMin = mkSpin(-120, -20, 5, tr(" dB"));
@@ -130,7 +133,7 @@ PreferencesDialog::PreferencesDialog(const AppConfig &cfg, QWidget *parent) : QD
     m_mStep->setSingleStep(0.25);
     m_mStep->setDecimals(2);
     m_mStep->setSuffix(tr(" dB"));
-    m_mStep->setToolTip(tr("Smaller step = more LEDs. 0.75 dB gives 124 LEDs over -90 … +3 dB."));
+    m_mStep->setToolTip(tr("Smaller step = more LEDs (number of LEDs = level range ÷ step)."));
     m_mScale = new QCheckBox(tr("Show dB scale"));
     m_mTrue = new QCheckBox(tr("Detect inter-sample (true) peaks"));
     m_mTrue->setToolTip(tr("The signal is oversampled to 192 kHz before measuring, so the red LED lights when "
@@ -141,7 +144,7 @@ PreferencesDialog::PreferencesDialog(const AppConfig &cfg, QWidget *parent) : QD
     meForm->addRow(tr("Lowest level:"), m_mMin);
     meForm->addRow(tr("Highest level:"), m_mMax);
     meForm->addRow(tr("Width per channel:"), m_mWidth);
-    meForm->addRow(tr("dB per LED (default 0.75 = 124 LEDs):"), m_mStep);
+    meForm->addRow(tr("dB per LED (default %1):").arg(MeterConfig().ledStepDb), m_mStep);
     meForm->addRow(QString(), m_mScale);
     meForm->addRow(QString(), m_mTrue);
     meForm->addRow(note(tr("LED colours: green, yellow (from -18 dB), orange (from -6 dB), "
@@ -213,7 +216,7 @@ void PreferencesDialog::setConfig(const AppConfig &cfg)
     m_spBars->setValue(s.bars);
     m_spFMin->setValue(int(s.fMinHz));
     m_spFMax->setValue(int(s.fMaxHz));
-    m_spScale->setCurrentIndex(s.logScale ? 1 : 0);
+    m_spScale->setCurrentIndex(std::max(0, m_spScale->findData(s.logScale)));
     m_spFloor->setValue(s.floorDb);
     m_spCeil->setValue(s.ceilDb);
     m_spFft->setCurrentIndex(std::max(0, m_spFft->findData(s.fftBands)));

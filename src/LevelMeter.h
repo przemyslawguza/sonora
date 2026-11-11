@@ -29,6 +29,7 @@ private slots:
 private:
     void setChannels(int n);
     int scaleWidth() const;
+    int topIndex() const;         // grid top in LED steps above 0 dB (>= 1)
     double gridTop() const;       // LED grid is aligned to 0 dB: a LED starts exactly at 0 dB and is red
     int ledCount() const;
     double gridBottom() const;

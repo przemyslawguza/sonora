@@ -54,18 +54,19 @@ int LevelMeter::scaleWidth() const { return m_cfg.showScale ? kScaleW : 0; }
 
 // LED k spans [bottom + k*step, bottom + (k+1)*step). The grid is anchored at 0 dB, so there is
 // always a LED whose lower edge is exactly 0 dB - that LED (and everything above) is red.
-double LevelMeter::gridTop() const
+int LevelMeter::topIndex() const
 {
-    const double s = m_cfg.ledStepDb;
-    return std::max(std::ceil(m_cfg.maxDb / s - 1e-9) * s, s);
+    return std::max(1, int(std::ceil(m_cfg.maxDb / m_cfg.ledStepDb - 1e-9)));
 }
+
+double LevelMeter::gridTop() const { return topIndex() * m_cfg.ledStepDb; }
 
 int LevelMeter::ledCount() const
 {
     return std::max(1, int(std::ceil((gridTop() - m_cfg.minDb) / m_cfg.ledStepDb - 1e-9)));
 }
 
-double LevelMeter::gridBottom() const { return gridTop() - ledCount() * m_cfg.ledStepDb; }
+double LevelMeter::gridBottom() const { return (topIndex() - ledCount()) * m_cfg.ledStepDb; }
 
 QSize LevelMeter::sizeHint() const
 {
@@ -174,7 +175,7 @@ void LevelMeter::paintEvent(QPaintEvent *)
             ? std::clamp(int((m_hold[i] - bot) / m_cfg.ledStepDb), 0, nLeds - 1) : -1;
 
         for (int j = 0; j < nLeds; ++j) {
-            const double lo = bot + j * m_cfg.ledStepDb;
+            const double lo = (j + topIndex() - nLeds) * m_cfg.ledStepDb;   // integer index * step: LED at 0 dB is exactly 0.0
             const QColor c = ledColor(lo);
             const bool lit = m_disp[i] > std::max(lo, m_cfg.minDb) + 1e-6;
             const double yBottom = plot.bottom() + 1 - j * ledH;
