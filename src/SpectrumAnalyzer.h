@@ -5,7 +5,7 @@
 #include <QWidget>
 #include "Config.h"
 
-// Bar spectrum analyser. Defaults: 0 ... 24 kHz, linear axis, 112 bars.
+// Bar spectrum analyser. Defaults: 0 ... 22 kHz, linear axis, 224 bars.
 // Frequency range, scale, bar count and dB range come from SpectrumConfig.
 class SpectrumAnalyzer : public QWidget
 {
@@ -30,7 +30,7 @@ private:
     double edge(int k) const;      // frequency (Hz) at bar boundary k
 
     SpectrumConfig m_cfg;
-    double m_fmin = 0, m_fmax = 24000, m_fminLog = 20;
+    double m_fmin = 0, m_fmax = 22000, m_fminLog = 20;
     QVector<double> m_bar, m_peak;
     QVector<qint64> m_peakAt;
     QTimer m_timer;

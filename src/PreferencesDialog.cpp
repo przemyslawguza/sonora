@@ -100,8 +100,8 @@ PreferencesDialog::PreferencesDialog(const AppConfig &cfg, QWidget *parent) : QD
     m_spFMin = mkSpin(0, 90000, 100, tr(" Hz"));
     m_spFMax = mkSpin(500, 96000, 500, tr(" Hz"));
     m_spScale = new QComboBox;
-    m_spScale->addItem(tr("Linear"), false);
     m_spScale->addItem(tr("Logarithmic (starts at 20 Hz or the minimum)"), true);
+    m_spScale->addItem(tr("Linear"), false);
     m_spFloor = mkSpin(-120, -20, 5, tr(" dB"));
     m_spCeil = mkSpin(-60, 12, 5, tr(" dB"));
     m_spFft = new QComboBox;
@@ -117,8 +117,8 @@ PreferencesDialog::PreferencesDialog(const AppConfig &cfg, QWidget *parent) : QD
     spForm->addRow(tr("Bottom of display:"), m_spFloor);
     spForm->addRow(tr("Top of display:"), m_spCeil);
     spForm->addRow(tr("FFT resolution:"), m_spFft);
-    spForm->addRow(note(tr("Default: 0 – 24 kHz, 112 bars, 2048 FFT bands. Content above half of the file's "
-                           "sample rate does not exist, so with 44.1 kHz material the top of a 24 kHz axis "
+    spForm->addRow(note(tr("Default: 0 – 22 kHz, 224 bars, 2048 FFT bands. Content above half of the file's "
+                           "sample rate does not exist, so with 44.1 kHz material the top of a 22 kHz axis "
                            "stays empty. The FFT resolution takes effect from the next track.")));
 
     // ------------------------------------------------ Level meters
