@@ -1,3 +1,9 @@
+sonora (0.3.4) unstable; urgency=low
+
+  * Shared configurable delay for level meters and spectrum
+
+ -- Your Name <you@example.com>  Wed, 11 Nov 2026 21:40:00 +0100
+
 sonora (0.3.3) unstable; urgency=low
 
   * Faster start: lazy GStreamer pipeline, parallel gst_init, no file-system
