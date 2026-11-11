@@ -1,0 +1,61 @@
+sonora (0.3.3) unstable; urgency=low
+
+  * Faster start: lazy GStreamer pipeline, parallel gst_init, no file-system
+    access while adding/restoring playlist items, throttled background tag
+    scanning that starts after the window is up, targeted device lookup.
+
+ -- Your Name <you@example.com>  Wed, 11 Nov 2026 11:00:00 +0100
+
+sonora (0.3.2) unstable; urgency=low
+
+  * Level meters: 4x more LEDs by default (0.75 dB per LED, 124 LEDs over
+    -90...+3 dB); the LED step is now configurable in 0.25 dB steps.
+
+ -- Your Name <you@example.com>  Wed, 11 Nov 2026 09:00:00 +0100
+
+sonora (0.3.1) unstable; urgency=low
+
+  * Level meters: inter-sample (true) peak detection with 192 kHz oversampling;
+    the red over-0 dB LED lights for overs between samples and is held longer.
+  * LED grid anchored at 0 dB for any LED step.
+
+ -- Your Name <you@example.com>  Tue, 10 Nov 2026 21:30:00 +0100
+
+sonora (0.3.0) unstable; urgency=low
+
+  * Preferences: sound service / device selection, buffering, custom sink.
+  * Spectrum: 0-24 kHz by default, 2x bars and FFT resolution, configurable.
+  * LED style level meters with configurable range and width.
+  * Playlist columns (title, artist, album, year, time, type), metadata
+    tooltips, sorting, elapsed/remaining time, dark mode.
+  * Space = play/pause, media keys and MPRIS2.
+
+ -- Your Name <you@example.com>  Tue, 10 Nov 2026 20:00:00 +0100
+
+sonora (0.2.2) unstable; urgency=low
+
+  * Add Files / Add Folder / Add URL, import playlists (M3U, M3U8, PLS) as
+    new or into the current playlist.
+  * Playlist manager dock listing all playlists.
+
+ -- Your Name <you@example.com>  Tue, 10 Nov 2026 18:00:00 +0100
+
+sonora (0.2.1) unstable; urgency=low
+
+  * Self-drawn transport buttons (prev, play, pause, stop, next, open,
+    repeat, shuffle) that stay visible with any theme.
+
+ -- Your Name <you@example.com>  Tue, 10 Nov 2026 16:00:00 +0100
+
+sonora (0.2.0) unstable; urgency=low
+
+  * Multiple playlists (tabs) with per-playlist filter, import/export.
+  * Spectrum analyser, shown by default.
+
+ -- Your Name <you@example.com>  Tue, 10 Nov 2026 14:00:00 +0100
+
+sonora (0.1.0) unstable; urgency=low
+
+  * Initial release.
+
+ -- Your Name <you@example.com>  Tue, 10 Nov 2026 12:00:00 +0100

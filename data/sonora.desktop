@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Sonora
+GenericName=Audio Player
+Comment=Audio player with playlists, level meters and spectrum analyser
+Exec=sonora %F
+Icon=sonora
+Terminal=false
+Categories=AudioVideo;Audio;Player;Qt;
+MimeType=audio/mpeg;audio/flac;audio/ogg;audio/x-wav;audio/mp4;audio/aac;audio/x-vorbis+ogg;audio/opus;
+Keywords=music;player;audio;mp3;flac;
