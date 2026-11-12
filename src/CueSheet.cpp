@@ -66,27 +66,35 @@ qint64 parseTime(const QString &t)                  // mm:ss:ff, 75 frames per s
 const QStringList kAudio = {"flac", "ape", "wv", "wav", "mp3", "ogg", "opus", "m4a", "aac",
                             "tta", "wma", "mka", "mpc", "aif", "aiff"};
 
-// The audio file named in a sheet is often wrong in case, directory separators or extension
-// (e.g. "album.wav" in the sheet, album.flac on disk), so try those variants too.
-QString resolveAudio(const QDir &dir, QString name)
+// Looks for fileName in d: exact name, same name in another case, or the same base name with
+// another audio extension (the sheet says "album.wav" but the file on disk is album.flac).
+QString findIn(const QDir &d, const QString &fileName)
 {
-    name.replace('\\', '/');
-    const QString direct = dir.absoluteFilePath(name);
-    if (QFileInfo(direct).isFile()) return QFileInfo(direct).absoluteFilePath();
-
-    const QFileInfo wanted(name);
-    const QDir sub(dir.absoluteFilePath(wanted.path()));
-    const QStringList entries = sub.entryList(QDir::Files);
-    for (const QString &e : entries)                                         // same name, other case
-        if (e.compare(wanted.fileName(), Qt::CaseInsensitive) == 0) return sub.absoluteFilePath(e);
-    const QString base = wanted.completeBaseName();
-    for (const QString &e : entries) {                                       // same base name, other extension
+    const QFileInfo direct(d.absoluteFilePath(fileName));
+    if (direct.isFile()) return direct.absoluteFilePath();
+    const QStringList entries = d.entryList(QDir::Files);
+    for (const QString &e : entries)
+        if (e.compare(fileName, Qt::CaseInsensitive) == 0) return d.absoluteFilePath(e);
+    const QString base = QFileInfo(fileName).completeBaseName();
+    for (const QString &e : entries) {
         const QFileInfo ei(e);
         if (ei.completeBaseName().compare(base, Qt::CaseInsensitive) == 0 &&
             kAudio.contains(ei.suffix(), Qt::CaseInsensitive))
-            return sub.absoluteFilePath(e);
+            return d.absoluteFilePath(e);
     }
     return {};
+}
+
+// The name in a sheet is often not usable as written: wrong case or extension, Windows separators
+// or a full Windows path ("D:\\Music\\album.flac"). Try the path relative to the sheet first, then
+// just the file name next to the sheet.
+QString resolveAudio(const QDir &dir, QString name)
+{
+    name.replace('\\', '/');
+    const QFileInfo wanted(name);
+    QString r = findIn(QDir(dir.absoluteFilePath(wanted.path())), wanted.fileName());
+    if (r.isEmpty()) r = findIn(dir, wanted.fileName());
+    return r;
 }
 
 CueSheet parseCue(const QString &absPath)

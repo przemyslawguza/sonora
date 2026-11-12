@@ -1,3 +1,19 @@
+sonora (0.3.6) unstable; urgency=low
+
+  * Fix: a playlist that contains only a .cue file (no separate FLAC entry)
+    hung when a track was started: the player waited for ASYNC_DONE, which
+    playbin does not deliver to a polling application. The file is now
+    opened in PAUSED and the pre-roll is polled, then the track is sought.
+  * Fix: tracks of a cue sheet end with EOS at the right position (SEGMENT_DONE
+    is never delivered); the stop position is always set, so the last track
+    no longer ends immediately; same fix for resuming after a sound-service
+    change.
+  * Safety: playback stops when 8 tracks end within a second; open timeout.
+  * Cue sheets with full Windows paths are resolved by file name.
+  * SONORA_DEBUG=1 prints player events (open, pre-roll, seek, EOS, errors).
+
+ -- Your Name <you@example.com>  Thu, 12 Nov 2026 15:00:00 +0100
+
 sonora (0.3.5) unstable; urgency=low
 
   * CUE sheet support: a .cue (with FLAC/APE/WV/WAV/MP3 ... image) is expanded

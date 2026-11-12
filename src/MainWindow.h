@@ -1,4 +1,5 @@
 #pragma once
+#include <QElapsedTimer>
 #include <QMainWindow>
 #include <QPointer>
 #include "Config.h"
@@ -105,4 +106,6 @@ private:
     bool m_showRemaining = false;
     int m_nameCounter = 0;
     int m_errorStreak = 0;
+    QElapsedTimer m_eosClock;               // guard against an endless chain of instantly ending tracks
+    int m_eosBurst = 0;
 };

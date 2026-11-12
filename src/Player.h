@@ -1,4 +1,5 @@
 #pragma once
+#include <QElapsedTimer>
 #include <QObject>
 #include <QTimer>
 #include <QUrl>
@@ -51,7 +52,8 @@ private:
     void setState(State s);
     int sampleRate();
     void drainBus();
-    void seekAbsolute(qint64 startMs, qint64 stopMs);
+    bool seekAbsolute(qint64 startMs, qint64 stopMs);
+    void startPending();
     bool ensurePipeline();                  // plugins are loaded only when first needed
 
     GstElement *m_pipe = nullptr;
@@ -62,11 +64,15 @@ private:
     double m_volume = 0.5;
     AudioOutputConfig m_outCfg;             // applied when the pipeline is created
     bool m_haveTp = false;                  // oversampled "tp" level element exists
-    qint64 m_pendingSeek = -1;
-    // CUE-sheet segment: the pipeline plays one file, only the range [m_segStart, m_segStop) is "the track"
+    // CUE-sheet segment: the pipeline plays one file, only [m_segStart, m_segStop) is "the track"
     qint64 m_segStart = 0, m_segStop = -1;
-    bool m_segPending = false;              // seek to the segment as soon as the file is prerolled
+    bool m_segMode = false;                 // the open file is played as CUE tracks (kept open at EOS)
     bool m_active = false;                  // pipeline is open (PAUSED/PLAYING) with m_uri
+    // The file is opened in PAUSED; when it is prerolled (polled - playbin does not deliver ASYNC_DONE
+    // to a polling application) we seek to the start position and go on playing.
+    bool m_pendingStart = false;
+    qint64 m_pendStartMs = 0, m_pendStopMs = -1;
+    QElapsedTimer m_pendClock;
     QByteArray m_uri;
     State m_state = Stopped;
     QTimer m_poll;

@@ -114,6 +114,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
             QMetaObject::invokeMethod(this, [this] { step(+1); }, Qt::QueuedConnection);
     });
     connect(m_player, &Player::endOfStream, this, [this] {
+        if (!m_eosClock.isValid() || m_eosClock.elapsed() > 1000) m_eosBurst = 0;
+        m_eosClock.restart();
+        if (++m_eosBurst > 8) {                        // 8 tracks ended within a second: something is wrong
+            m_eosBurst = 0;
+            m_player->stop();
+            statusBar()->showMessage(tr("Playback stopped: tracks end immediately "
+                                        "(check the cue sheet and its audio file)"), 10000);
+            return;
+        }
         QMetaObject::invokeMethod(this, [this] { step(+1); }, Qt::QueuedConnection);
     });
 

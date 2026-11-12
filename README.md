@@ -61,6 +61,7 @@ Saved user settings override defaults: delete `~/.config/sonora/` to see new def
   sheet names it with another case or extension (`album.wav` in the sheet, `album.flac` on disk), the sheet may be
   UTF-8 or a legacy code page (Windows-1250/1251/1252 by your language). When a folder is added, an image that a cue
   sheet already splits is not listed a second time. Switching between tracks of one image does not re-open the file.
+  The playlist may contain just the `.cue`: the audio file does not have to be listed.
   Not supported: a cue sheet embedded inside the FLAC (`CUESHEET` tag).
 * **Playlist columns**: title, artist, album, year, time, file type; right-click the header to show/hide columns,
   click it to sort (asc / desc / original). The filter also matches artist, album and year.
@@ -77,7 +78,8 @@ Saved user settings override defaults: delete `~/.config/sonora/` to see new def
 * **Fast start**: the window is painted first; GStreamer initialises in a parallel thread, the playback pipeline (and
   the chosen sound service / device) is created when the first track starts, restoring playlists does not touch the
   disk up front, and background tag reading starts ~1.5 s after the window is up (at most 4 files in flight).
-  `SONORA_PROFILE=1 sonora` prints start-up timings.
+  `SONORA_PROFILE=1 sonora` prints start-up timings; `SONORA_DEBUG=1 sonora` prints player events
+  (open, pre-roll, seek, EOS, errors) - useful when something does not play.
 
 ## Build
 
@@ -86,7 +88,7 @@ Saved user settings override defaults: delete `~/.config/sonora/` to see new def
 
 ## Debian package (Debian 12 "bookworm" / 13 "trixie")
 
-    ./build-deb.sh            # -> ../sonora_0.3.5_<arch>.deb
+    ./build-deb.sh            # -> ../sonora_0.3.6_<arch>.deb
 
 No architecture-specific code: run the same command on an arm64 or amd64 machine / chroot / container
 (`sbuild`, `pbuilder`, or Docker `arm64v8/debian:12` with QEMU). Cross-compiling with
