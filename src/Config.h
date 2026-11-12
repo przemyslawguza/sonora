@@ -43,7 +43,7 @@ struct AppConfig
     {
         audio.load(s); spectrum.load(s); meter.load(s);
         const AppConfig d;                  // defaults live here only
-        vizDelayMs = std::clamp(s.value("visualisation/delayMs", d.vizDelayMs).toInt(), 0, 2000);
+        vizDelayMs = std::clamp(s.value("visualisation/delayMs", d.vizDelayMs).toInt(), 0, 4000);
     }
     void save(QSettings &s) const
     {

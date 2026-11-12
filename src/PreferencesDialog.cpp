@@ -152,7 +152,7 @@ PreferencesDialog::PreferencesDialog(const AppConfig &cfg, QWidget *parent) : QD
                            "A single LED marks the peak hold; overs are held longer.")));
 
     // ------------------------------------------------ Synchronisation (shared by meters + spectrum)
-    m_vizDelay = mkSpin(0, 2000, 10, tr(" ms"));
+    m_vizDelay = mkSpin(0, 4000, 10, tr(" ms"));
     m_vizDelay->setSpecialValueText(tr("no delay"));
     m_vizDelay->setToolTip(tr("Applied to the level meters and the spectrum analyser together."));
     auto *viz = new QWidget;

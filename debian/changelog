@@ -1,7 +1,7 @@
 sonora (0.3.4) unstable; urgency=low
 
   * Shared configurable delay for level meters and spectrum (Preferences >
-    Synchronisation, 0-2000 ms, one setting for both displays).
+    Synchronisation, 0-4000 ms, one setting for both displays).
 
  -- Your Name <you@example.com>  Wed, 11 Nov 2026 21:40:00 +0100
 

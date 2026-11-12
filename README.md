@@ -52,7 +52,7 @@ Saved user settings override defaults: delete `~/.config/sonora/` to see new def
 * **True-peak (inter-sample) metering**: the meter measures a copy of the signal oversampled to 192 kHz (at least 4x
   for 44.1/48 kHz material, as in ITU-R BS.1770), so the red LED lights when the waveform between two samples goes
   above 0 dB. Switch in Preferences > Level meters.
-* **Synchronisation delay**: a single delay (0 - 2000 ms, Preferences > *Synchronisation*) applied to the level meters
+* **Synchronisation delay**: a single delay (0 - 4000 ms, Preferences > *Synchronisation*) applied to the level meters
   *and* the spectrum analyser together, to compensate the sound card / Bluetooth output latency so the pictures match
   what you hear. It can be changed while playing.
 * **Playlist columns**: title, artist, album, year, time, file type; right-click the header to show/hide columns,
