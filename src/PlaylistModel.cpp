@@ -1,4 +1,5 @@
 #include "PlaylistModel.h"
+#include "CueSheet.h"
 #include "MetadataLoader.h"
 #include <QDir>
 #include <QElapsedTimer>
@@ -40,10 +41,124 @@ QString PlaylistModel::titleOf(const Item &it)
 
 void PlaylistModel::rebuildSearch(Item &it)
 {
-    it.search = it.path + ' ' + titleOf(it) + ' ' + it.info.artist + ' ' + it.info.album;
+    it.search = it.path + ' ' + it.cueAudio + ' ' + titleOf(it) + ' ' + it.info.artist + ' ' + it.info.album;
     if (it.info.year > 0) it.search += ' ' + QString::number(it.info.year);
 }
 
+// ---------------------------------------------------------------- CUE tracks
+void PlaylistModel::mergeInfo(Item &it)
+{
+    TrackInfo m = it.cueInfo;                         // title, artist, album, year, genre ... from the sheet
+    if (it.fileScanned) {
+        const TrackInfo &f = it.fileInfo;
+        m.codec = f.codec;                            // technical data come from the audio file
+        m.bitrate = f.bitrate;
+        m.sampleRate = f.sampleRate;
+        m.channels = f.channels;
+        m.depth = f.depth;
+        m.fileSize = f.fileSize;
+        if (m.album.isEmpty())    m.album = f.album;  // gaps in the sheet are filled from the file's tags
+        if (m.artist.isEmpty())   m.artist = f.artist;
+        if (m.genre.isEmpty())    m.genre = f.genre;
+        if (m.composer.isEmpty()) m.composer = f.composer;
+        if (m.comment.isEmpty())  m.comment = f.comment;
+        if (m.year <= 0)          m.year = f.year;
+    }
+    if (it.endMs >= 0)
+        m.durationMs = it.endMs - it.startMs;
+    else if (it.fileScanned && it.fileInfo.durationMs > 0)    // last track: up to the end of the file
+        m.durationMs = std::max<qint64>(0, it.fileInfo.durationMs - it.startMs);
+    else
+        m.durationMs = -1;
+    m.valid = true;
+    it.info = m;
+    it.haveInfo = true;
+}
+
+bool PlaylistModel::resolveCue(Item &it)
+{
+    if (it.cueResolved) return !it.cueAudio.isEmpty();
+    it.cueResolved = true;
+
+    const CueSheet cs = CueSheet::load(it.path);
+    const CueTrack *t = cs.track(it.cueTrack);
+    if (!t || t->audioFile.isEmpty()) return false;
+
+    it.cueAudio = t->audioFile;
+    it.audioUrl = QUrl::fromLocalFile(t->audioFile);
+    it.startMs = t->startMs;
+    it.endMs = t->endMs;
+    it.suffix = QFileInfo(t->audioFile).suffix();
+    it.key = MetadataLoader::keyFor(it.audioUrl);     // all tracks of one image share one file scan
+
+    TrackInfo c;
+    c.title = t->title;
+    c.artist = !t->performer.isEmpty() ? t->performer : cs.performer;
+    c.albumArtist = cs.performer;
+    c.album = cs.album;
+    c.genre = cs.genre;
+    c.composer = t->composer;
+    c.comment = cs.comment;
+    c.year = cs.year;
+    c.track = t->number;
+    it.cueInfo = c;
+    mergeInfo(it);
+    return true;
+}
+
+// Resolves one item: computes its metadata key (the only place that touches the disk), takes tags
+// from the cache or queues a background scan.
+bool PlaylistModel::resolveOne(Item &it)
+{
+    if (it.resolved) return false;
+    it.resolved = true;
+    MetadataLoader &loader = MetadataLoader::instance();
+    bool changed = false;
+
+    if (it.isCue) {
+        changed = true;
+        if (resolveCue(it) && !it.key.isEmpty()) {
+            if (const TrackInfo *ti = loader.find(it.key)) {
+                it.fileInfo = *ti;
+                it.fileScanned = true;
+                mergeInfo(it);
+            } else {
+                loader.request(it.key, it.audioUrl);
+            }
+        }
+        rebuildSearch(it);
+    } else if (it.url.isLocalFile()) {
+        it.key = MetadataLoader::keyFor(it.url);
+        if (!it.key.isEmpty()) {
+            if (const TrackInfo *ti = loader.find(it.key)) {
+                it.info = *ti;
+                it.haveInfo = true;
+                rebuildSearch(it);
+                changed = true;
+            } else {
+                loader.request(it.key, it.url);
+            }
+        }
+    }
+    return changed;
+}
+
+PlaylistModel::PlayTarget PlaylistModel::playTarget(int row)
+{
+    PlayTarget t;
+    if (row < 0 || row >= m_items.size()) return t;
+    Item &it = m_items[row];
+    if (!it.isCue) { t.url = it.url; return t; }
+    if (resolveOne(it)) emit dataChanged(index(row, 0), index(row, ColCount - 1));
+    if (!it.cueAudio.isEmpty()) {
+        t.url = it.audioUrl;
+        t.startMs = it.startMs;
+        t.stopMs = it.endMs;
+    }
+    return t;
+}
+
+// ---------------------------------------------------------------- model API
 QVariant PlaylistModel::headerData(int section, Qt::Orientation o, int role) const
 {
     if (o != Qt::Horizontal || role != Qt::DisplayRole) return {};
@@ -110,7 +225,9 @@ QString PlaylistModel::tooltipFor(const Item &it) const
     QString h = QStringLiteral("<table cellspacing='2'>");
     h += QStringLiteral("<tr><td colspan='2'><big><b>%1</b></big></td></tr>").arg(titleOf(it).toHtmlEscaped());
 
-    if (!it.haveInfo && it.url.isLocalFile()) {
+    if (it.isCue && it.cueResolved && it.cueAudio.isEmpty()) {
+        h += row(tr("Status"), tr("audio file of this cue sheet / track was not found"));
+    } else if (!it.haveInfo && it.url.isLocalFile()) {
         h += row(tr("Status"), tr("reading metadata…"));
     } else {
         h += row(tr("Artist"), t.artist);
@@ -139,7 +256,13 @@ QString PlaylistModel::tooltipFor(const Item &it) const
         if (t.fileSize > 0) h += row(tr("File size"), QLocale().formattedDataSize(t.fileSize));
         if (!t.comment.isEmpty()) h += row(tr("Comment"), t.comment.left(200));
     }
-    h += row(tr("Path"), it.path);
+    if (it.isCue && !it.cueAudio.isEmpty()) {          // where the track really comes from
+        h += row(tr("Cue sheet"), QFileInfo(it.path).fileName());
+        h += row(tr("Audio file"), QFileInfo(it.cueAudio).fileName());
+        h += row(tr("Range"), formatDuration(it.startMs) + QStringLiteral(" – ") +
+                              (it.endMs >= 0 ? formatDuration(it.endMs) : tr("end of file")));
+    }
+    h += row(tr("Path"), it.isCue && !it.cueAudio.isEmpty() ? it.cueAudio : it.path);
     h += QStringLiteral("</table>");
     return h;
 }
@@ -150,9 +273,9 @@ bool PlaylistModel::removeRows(int row, int count, const QModelIndex &parent)
     beginRemoveRows(parent, row, row + count - 1);
     m_items.remove(row, count);
     endRemoveRows();
+    if (m_current >= row) m_current = (m_current < row + count) ? -1 : m_current - count;
     m_resolvePos = std::min(m_resolvePos, row);
     if (m_resolvePos < m_items.size() && !m_resolveTimer.isActive()) m_resolveTimer.start(0);
-    if (m_current >= row) m_current = (m_current < row + count) ? -1 : m_current - count;
     return true;
 }
 
@@ -168,6 +291,12 @@ void PlaylistModel::addUrls(const QList<QUrl> &urls)
         const QFileInfo fi(it.path);
         it.fileTitle = u.isLocalFile() ? fi.completeBaseName() : it.path;
         it.suffix = u.isLocalFile() ? fi.suffix() : QString();
+        int track = 0;
+        if (CueSheet::isCueUrl(u, &track)) {            // a track of a cue sheet: details are read later
+            it.isCue = true;
+            it.cueTrack = track;
+            it.fileTitle = QStringLiteral("%1 #%2").arg(fi.completeBaseName()).arg(track);
+        }
         rebuildSearch(it);               // metadata key / cache lookup happens later, in resolveChunk()
         m_items.append(it);
     }
@@ -179,29 +308,14 @@ void PlaylistModel::addUrls(const QList<QUrl> &urls)
 // so adding or restoring thousands of files never blocks the user interface.
 void PlaylistModel::resolveChunk()
 {
-    MetadataLoader &loader = MetadataLoader::instance();
     QElapsedTimer t;
     t.start();
     int lo = INT_MAX, hi = -1;
     int r = m_resolvePos;
     for (; r < m_items.size(); ++r) {
-        Item &it = m_items[r];
-        if (!it.resolved) {
-            it.resolved = true;
-            if (it.url.isLocalFile()) {
-                it.key = MetadataLoader::keyFor(it.url);          // the only place that touches the disk
-                if (!it.key.isEmpty()) {
-                    if (const TrackInfo *ti = loader.find(it.key)) {
-                        it.info = *ti;
-                        it.haveInfo = true;
-                        rebuildSearch(it);
-                        lo = std::min(lo, r);
-                        hi = std::max(hi, r);
-                    } else {
-                        loader.request(it.key, it.url);
-                    }
-                }
-            }
+        if (resolveOne(m_items[r])) {
+            lo = std::min(lo, r);
+            hi = std::max(hi, r);
         }
         if ((r & 15) == 15 && t.elapsed() > 8) { ++r; break; }
     }
@@ -216,13 +330,26 @@ void PlaylistModel::applyMetadata()
     int lo = INT_MAX, hi = -1;
     for (int r = 0; r < m_items.size(); ++r) {
         Item &it = m_items[r];
-        if (it.haveInfo || it.key.isEmpty()) continue;
-        if (const TrackInfo *t = loader.find(it.key)) {
-            it.info = *t;
-            it.haveInfo = true;
-            rebuildSearch(it);
-            lo = std::min(lo, r);
-            hi = std::max(hi, r);
+        if (it.key.isEmpty()) continue;
+        if (it.isCue) {
+            if (!it.cueResolved || it.cueAudio.isEmpty() || it.fileScanned) continue;
+            if (const TrackInfo *t = loader.find(it.key)) {
+                it.fileInfo = *t;
+                it.fileScanned = true;
+                mergeInfo(it);                         // e.g. the length of the last track is now known
+                rebuildSearch(it);
+                lo = std::min(lo, r);
+                hi = std::max(hi, r);
+            }
+        } else {
+            if (it.haveInfo) continue;
+            if (const TrackInfo *t = loader.find(it.key)) {
+                it.info = *t;
+                it.haveInfo = true;
+                rebuildSearch(it);
+                lo = std::min(lo, r);
+                hi = std::max(hi, r);
+            }
         }
     }
     if (hi >= 0) emit dataChanged(index(lo, 0), index(hi, ColCount - 1));
@@ -268,6 +395,7 @@ qint64 PlaylistModel::totalDurationMs() const
     return sum;
 }
 
+// ---------------------------------------------------------------- playlist files
 bool PlaylistModel::importFile(const QString &file)
 {
     QFile f(file);
@@ -288,12 +416,17 @@ bool PlaylistModel::importFile(const QString &file)
             line = m.captured(1).trimmed();
             if (line.isEmpty()) continue;
         }
-        if (line.contains("://"))
+        if (line.contains("://")) {                     // URLs, including our own file:///x.cue#N tracks
             urls << QUrl(line);
-        else if (QDir::isAbsolutePath(line))
-            urls << QUrl::fromLocalFile(QDir::cleanPath(line));
-        else
-            urls << QUrl::fromLocalFile(QDir::cleanPath(base.absoluteFilePath(line)));
+            continue;
+        }
+        const QString path = QDir::cleanPath(QDir::isAbsolutePath(line) ? line : base.absoluteFilePath(line));
+        if (path.endsWith(".cue", Qt::CaseInsensitive)) {   // a whole cue sheet: all its tracks
+            const CueSheet cs = CueSheet::load(path);
+            for (const CueTrack &t : cs.tracks) urls << cs.trackUrl(t.number);
+        } else {
+            urls << QUrl::fromLocalFile(path);
+        }
     }
     addUrls(urls);
     return true;
@@ -305,12 +438,16 @@ bool PlaylistModel::saveM3U(const QString &file) const
     if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) return false;
     QTextStream out(&f);
     out << "#EXTM3U\n";
-    for (const Item &it : m_items)
-        out << (it.url.isLocalFile() ? it.url.toLocalFile() : it.url.toString()) << '\n';
+    for (const Item &it : m_items) {
+        if (it.isCue)            out << it.url.toString(QUrl::FullyEncoded) << '\n';   // cue sheet + track number
+        else if (it.url.isLocalFile()) out << it.url.toLocalFile() << '\n';
+        else                     out << it.url.toString() << '\n';
+    }
     out.flush();
     return f.commit();
 }
 
+// ---------------------------------------------------------------- filter
 PlaylistFilterModel::PlaylistFilterModel(QObject *parent) : QSortFilterProxyModel(parent)
 {
     setSortRole(PlaylistModel::SortRole);

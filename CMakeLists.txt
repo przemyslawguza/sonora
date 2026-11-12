@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.18)
-project(sonora VERSION 0.3.4 LANGUAGES CXX)
+project(sonora VERSION 0.3.5 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,6 +22,7 @@ add_executable(sonora
   src/AudioOutput.cpp      src/AudioOutput.h
   src/PreferencesDialog.cpp src/PreferencesDialog.h
   src/Config.cpp           src/Config.h
+  src/CueSheet.cpp         src/CueSheet.h
   src/Mpris.cpp            src/Mpris.h
   src/VizDelay.cpp         src/VizDelay.h
   src/TrackInfo.h          src/TransportIcons.h)

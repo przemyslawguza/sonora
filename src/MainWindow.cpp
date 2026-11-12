@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "AudioOutput.h"
+#include "CueSheet.h"
 #include "LevelMeter.h"
 #include "MetadataLoader.h"
 #include "Mpris.h"
@@ -33,6 +34,7 @@
 #include <QMimeData>
 #include <QPushButton>
 #include <QRandomGenerator>
+#include <QSet>
 #include <QSaveFile>
 #include <QSettings>
 #include <QSlider>
@@ -613,9 +615,22 @@ void MainWindow::addPaths(const QStringList &paths)
 
     QList<QUrl> urls;
     auto flush = [&] { current()->model()->addUrls(urls); urls.clear(); };
+    auto addCue = [&](const QString &cuePath) {        // a cue sheet = one playlist entry per track
+        const CueSheet cs = CueSheet::load(cuePath);
+        if (!cs.isValid()) {
+            statusBar()->showMessage(tr("%1: no playable tracks (audio file not found?)")
+                                         .arg(QFileInfo(cuePath).fileName()), 8000);
+            return;
+        }
+        for (const CueTrack &t : cs.tracks) urls << cs.trackUrl(t.number);
+    };
+
     for (const QString &p : paths) {
         const QFileInfo fi(p);
-        if (fi.isFile() && kPlaylistSuffixes.contains(fi.suffix(), Qt::CaseInsensitive)) {
+        const QString suffix = fi.suffix().toLower();
+        if (fi.isFile() && suffix == "cue") {
+            addCue(fi.absoluteFilePath());
+        } else if (fi.isFile() && kPlaylistSuffixes.contains(suffix)) {
             flush();                                   // keep the order of mixed input
             current()->model()->importFile(fi.absoluteFilePath());
         } else if (fi.isDir()) {
@@ -623,12 +638,22 @@ void MainWindow::addPaths(const QStringList &paths)
             QDirIterator it(fi.absoluteFilePath(), QDir::Files, QDirIterator::Subdirectories);
             while (it.hasNext()) {
                 const QString f = it.next();
-                if (kAudioSuffixes.contains(QFileInfo(f).suffix(), Qt::CaseInsensitive)) found << f;
+                const QString sfx = QFileInfo(f).suffix().toLower();
+                if (sfx == "cue" || kAudioSuffixes.contains(sfx)) found << f;
             }
             std::sort(found.begin(), found.end(), [&](const QString &a, const QString &b) {
                 return coll.compare(a, b) < 0;
             });
-            for (const QString &f : found) urls << QUrl::fromLocalFile(f);
+            QSet<QString> covered;                     // audio files that a cue sheet splits into tracks
+            for (const QString &f : found)
+                if (QFileInfo(f).suffix().compare("cue", Qt::CaseInsensitive) == 0)
+                    covered |= CueSheet::load(f).audioFiles();
+            for (const QString &f : found) {
+                if (QFileInfo(f).suffix().compare("cue", Qt::CaseInsensitive) == 0)
+                    addCue(f);
+                else if (!covered.contains(QFileInfo(f).absoluteFilePath()))
+                    urls << QUrl::fromLocalFile(f);    // not listed twice: as one big file AND as tracks
+            }
         } else if (fi.exists()) {
             urls << QUrl::fromLocalFile(fi.absoluteFilePath());
         } else if (p.contains("://")) {
@@ -643,9 +668,9 @@ void MainWindow::playFirst() { playFrom(current(), 0); }
 void MainWindow::addFiles()
 {
     QStringList globs;
-    for (const QString &e : kAudioSuffixes + kPlaylistSuffixes) globs << "*." + e;
+    for (const QString &e : kAudioSuffixes + kPlaylistSuffixes + QStringList{"cue"}) globs << "*." + e;
     const QStringList files = QFileDialog::getOpenFileNames(this, tr("Add files to playlist"), {},
-        tr("Audio and playlist files (%1);;All files (*)").arg(globs.join(' ')));
+        tr("Audio, cue sheet and playlist files (%1);;All files (*)").arg(globs.join(' ')));
     if (!files.isEmpty()) addPaths(files);
 }
 
@@ -712,11 +737,23 @@ void MainWindow::playFrom(PlaylistWidget *w, int proxyRow)
     const QModelIndex src = w->proxy()->mapToSource(pidx);
     if (!src.isValid()) return;
 
+    // For a CUE track this is the audio file plus the range of the track.
+    const PlaylistModel::PlayTarget target = w->model()->playTarget(src.row());
+    if (!target.url.isValid()) {                       // e.g. the audio file of the cue sheet is missing
+        statusBar()->showMessage(tr("Cannot find the audio file for “%1”").arg(w->model()->titleAt(src.row())), 8000);
+        if (w->proxy()->rowCount() > 1 && ++m_errorStreak < w->proxy()->rowCount()) {
+            m_playing = w;                             // so that Next continues after this entry
+            w->model()->setCurrent(src.row());
+            QMetaObject::invokeMethod(this, [this] { step(+1); }, Qt::QueuedConnection);
+        }
+        return;
+    }
+
     if (m_playing && m_playing != w) m_playing->model()->setCurrent(-1);
     m_playing = w;
     w->model()->setCurrent(src.row());
     m_viz->clear();                                   // nothing of the previous track may show up late
-    m_player->play(w->model()->urlAt(src.row()));
+    m_player->play(target.url, target.startMs, target.stopMs);
     w->view()->scrollTo(pidx);
     updateTabIcons();
     updateNowPlaying();

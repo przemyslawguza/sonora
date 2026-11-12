@@ -1,3 +1,13 @@
+sonora (0.3.5) unstable; urgency=low
+
+  * CUE sheet support: a .cue (with FLAC/APE/WV/WAV/MP3 ... image) is expanded
+    into one playlist entry per track, with title/artist/album/year/genre from
+    the sheet; folders skip audio files that a cue sheet already covers.
+  * Player: playing a part of a file, tracks of one image switch without
+    re-opening the file; time and seeking are relative to the track.
+
+ -- Your Name <you@example.com>  Thu, 12 Nov 2026 12:00:00 +0100
+
 sonora (0.3.4) unstable; urgency=low
 
   * Shared configurable delay for level meters and spectrum (Preferences >

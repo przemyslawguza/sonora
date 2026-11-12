@@ -23,7 +23,10 @@ public:
     qint64 duration() const;   // ms
 
 public slots:
-    void play(const QUrl &url);
+    // startMs >= 0: play only a part of the file (a CUE-sheet track): from startMs to stopMs
+    // (stopMs < 0 = until the end of the file). position()/duration()/seek() are then relative
+    // to the track, not to the file.
+    void play(const QUrl &url, qint64 startMs = -1, qint64 stopMs = -1);
     void resume();
     void pause();
     void stop();
@@ -48,6 +51,7 @@ private:
     void setState(State s);
     int sampleRate();
     void drainBus();
+    void seekAbsolute(qint64 startMs, qint64 stopMs);
     bool ensurePipeline();                  // plugins are loaded only when first needed
 
     GstElement *m_pipe = nullptr;
@@ -59,6 +63,11 @@ private:
     AudioOutputConfig m_outCfg;             // applied when the pipeline is created
     bool m_haveTp = false;                  // oversampled "tp" level element exists
     qint64 m_pendingSeek = -1;
+    // CUE-sheet segment: the pipeline plays one file, only the range [m_segStart, m_segStop) is "the track"
+    qint64 m_segStart = 0, m_segStop = -1;
+    bool m_segPending = false;              // seek to the segment as soon as the file is prerolled
+    bool m_active = false;                  // pipeline is open (PAUSED/PLAYING) with m_uri
+    QByteArray m_uri;
     State m_state = Stopped;
     QTimer m_poll;
 };

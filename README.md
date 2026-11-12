@@ -55,6 +55,13 @@ Saved user settings override defaults: delete `~/.config/sonora/` to see new def
 * **Synchronisation delay**: a single delay (0 - 4000 ms, Preferences > *Synchronisation*) applied to the level meters
   *and* the spectrum analyser together, to compensate the sound card / Bluetooth output latency so the pictures match
   what you hear. It can be changed while playing.
+* **CUE sheets** (`.cue` + FLAC / APE / WavPack / WAV / MP3 ... image): add the `.cue` (Add Files, drag & drop, a folder,
+  or an M3U that lists it) and every track becomes its own playlist entry with title, artist, album, year and genre
+  from the sheet; time, seeking and the length of the last track are per track. The audio file is found even when the
+  sheet names it with another case or extension (`album.wav` in the sheet, `album.flac` on disk), the sheet may be
+  UTF-8 or a legacy code page (Windows-1250/1251/1252 by your language). When a folder is added, an image that a cue
+  sheet already splits is not listed a second time. Switching between tracks of one image does not re-open the file.
+  Not supported: a cue sheet embedded inside the FLAC (`CUESHEET` tag).
 * **Playlist columns**: title, artist, album, year, time, file type; right-click the header to show/hide columns,
   click it to sort (asc / desc / original). The filter also matches artist, album and year.
 * **Metadata tooltip** when the mouse rests on a track: artist, album artist, album, year, track/disc, genre, composer,
@@ -79,7 +86,7 @@ Saved user settings override defaults: delete `~/.config/sonora/` to see new def
 
 ## Debian package (Debian 12 "bookworm" / 13 "trixie")
 
-    ./build-deb.sh            # -> ../sonora_0.3.4_<arch>.deb
+    ./build-deb.sh            # -> ../sonora_0.3.5_<arch>.deb
 
 No architecture-specific code: run the same command on an arm64 or amd64 machine / chroot / container
 (`sbuild`, `pbuilder`, or Docker `arm64v8/debian:12` with QEMU). Cross-compiling with

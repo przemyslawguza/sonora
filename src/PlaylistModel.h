@@ -13,6 +13,13 @@ public:
     enum Column { ColTitle, ColArtist, ColAlbum, ColYear, ColTime, ColType, ColCount };
     enum Roles { UrlRole = Qt::UserRole + 1, SearchRole, SortRole };
 
+    // What the player has to open: for a CUE track the audio file plus the range of the track.
+    struct PlayTarget {
+        QUrl url;                   // invalid = cannot be played (e.g. audio file of a cue sheet is missing)
+        qint64 startMs = -1;        // < 0: whole file
+        qint64 stopMs = -1;         // < 0: until the end of the file
+    };
+
     explicit PlaylistModel(QObject *parent = nullptr);
 
     int rowCount(const QModelIndex &parent = {}) const override;
@@ -23,16 +30,18 @@ public:
     { return QAbstractTableModel::index(row, column, parent); }
     bool removeRows(int row, int count, const QModelIndex &parent = {}) override;
 
+    // Plain files, remote URLs, and CUE tracks (file:///dir/album.cue#N, see CueSheet::trackUrl()).
     void addUrls(const QList<QUrl> &urls);
     void clear();
     int current() const { return m_current; }          // source row, or -1
     void setCurrent(int row);
     QUrl urlAt(int row) const;
+    PlayTarget playTarget(int row);
     QString titleAt(int row) const;
     TrackInfo infoAt(int row) const;
     qint64 totalDurationMs() const;                    // sum of the durations known so far
 
-    bool importFile(const QString &file);              // .m3u .m3u8 .pls, relative paths resolved
+    bool importFile(const QString &file);              // .m3u .m3u8 .pls, relative paths resolved, .cue expanded
     bool loadM3U(const QString &file) { return importFile(file); }
     bool saveM3U(const QString &file) const;
 
@@ -44,12 +53,25 @@ private:
     struct Item {
         QUrl url;
         QString path, fileTitle, suffix, key, search;
-        TrackInfo info;
+        TrackInfo info;                 // what is shown (for CUE tracks: cue tags + file technical data)
         bool haveInfo = false;
-        bool resolved = false;      // metadata key computed / cache consulted
+        bool resolved = false;          // metadata key computed / cache consulted
+        // --- CUE tracks only
+        bool isCue = false;
+        bool cueResolved = false;
+        bool fileScanned = false;       // fileInfo valid
+        int cueTrack = 0;
+        QString cueAudio;               // absolute path of the audio file
+        QUrl audioUrl;
+        qint64 startMs = 0, endMs = -1;
+        TrackInfo cueInfo;              // tags from the cue sheet
+        TrackInfo fileInfo;             // scan of the audio file (duration, codec, bitrate ...)
     };
     static QString titleOf(const Item &it);
     static void rebuildSearch(Item &it);
+    static void mergeInfo(Item &it);    // cueInfo + fileInfo -> info
+    static bool resolveCue(Item &it);   // true if the audio file of the track was found
+    static bool resolveOne(Item &it);   // true if the displayed data changed
     QString tooltipFor(const Item &it) const;
 
     QVector<Item> m_items;

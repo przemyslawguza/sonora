@@ -1,4 +1,5 @@
 #include "Player.h"
+#include <algorithm>
 #include <cmath>
 
 namespace {
@@ -158,8 +159,8 @@ void Player::setOutput(const AudioOutputConfig &cfg)
     m_outCfg = cfg;
     if (!m_pipe) return;                // applied when the pipeline is created (first play)
     const State prev = m_state;
-    const qint64 pos = prev != Stopped ? position() : 0;
-    if (prev != Stopped) gst_element_set_state(m_pipe, GST_STATE_NULL);
+    const qint64 pos = prev != Stopped ? position() : 0;       // relative to the track
+    if (prev != Stopped) { gst_element_set_state(m_pipe, GST_STATE_NULL); m_active = false; }
 
     QString err;
     GstElement *sink = AudioOutput::createSink(cfg, &err);    // nullptr = automatic
@@ -169,26 +170,50 @@ void Player::setOutput(const AudioOutputConfig &cfg)
     if (prev != Stopped) {                                    // resume where we were
         drainBus();
         m_pendingSeek = pos;
+        m_active = true;
         gst_element_set_state(m_pipe, prev == Paused ? GST_STATE_PAUSED : GST_STATE_PLAYING);
     }
 }
 
-void Player::play(const QUrl &url)
+void Player::play(const QUrl &url, qint64 startMs, qint64 stopMs)
 {
     if (!ensurePipeline()) { emit errorMessage(tr("GStreamer 'playbin' element is missing")); return; }
-    gst_element_set_state(m_pipe, GST_STATE_NULL);
+    const QByteArray uri = url.toEncoded();
+    const bool segment = startMs >= 0;                        // a track of a CUE-sheet image
     m_rate = 0;
     m_pendingSeek = -1;
     if (m_spec) g_object_set(m_spec, "bands", guint(m_specBands), nullptr);
+
+    // Next track of the same image file: only seek, do not close and re-open the file.
+    if (segment && m_active && uri == m_uri) {
+        m_segStart = startMs;
+        m_segStop = stopMs;
+        m_segPending = false;
+        seekAbsolute(startMs, stopMs);
+        gst_element_set_state(m_pipe, GST_STATE_PLAYING);
+        setState(Playing);
+        return;
+    }
+
+    gst_element_set_state(m_pipe, GST_STATE_NULL);
+    m_active = false;
     drainBus();                                               // drop stale messages
 
-    g_object_set(m_pipe, "uri", url.toEncoded().constData(), nullptr);
-    if (gst_element_set_state(m_pipe, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE) {
+    m_uri = uri;
+    m_segStart = segment ? startMs : 0;
+    m_segStop = segment ? stopMs : -1;
+    m_segPending = segment;
+    g_object_set(m_pipe, "uri", uri.constData(), nullptr);
+    // A segment is prerolled in PAUSED first; the seek is issued when that is done (ASYNC_DONE),
+    // so nothing of the beginning of the file is heard.
+    if (gst_element_set_state(m_pipe, segment ? GST_STATE_PAUSED : GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE) {
         emit errorMessage(tr("Cannot play %1").arg(url.toString()));
         gst_element_set_state(m_pipe, GST_STATE_NULL);
+        m_segPending = false;
         setState(Stopped);
         return;
     }
+    m_active = true;
     setState(Playing);
 }
 
@@ -212,15 +237,27 @@ void Player::stop()
 {
     if (m_pipe) gst_element_set_state(m_pipe, GST_STATE_NULL);
     m_pendingSeek = -1;
+    m_segPending = false;
+    m_active = false;
     setState(Stopped);
 }
 
-void Player::seek(qint64 ms)
+// Absolute position in the file. With a stop position a SEGMENT seek is used: at the end of the
+// range the pipeline posts SEGMENT_DONE (instead of EOS) and stays open for the next track.
+void Player::seekAbsolute(qint64 startMs, qint64 stopMs)
+{
+    int flags = GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE;
+    if (stopMs >= 0) flags |= GST_SEEK_FLAG_SEGMENT;
+    gst_element_seek(m_pipe, 1.0, GST_FORMAT_TIME, GstSeekFlags(flags),
+                     GST_SEEK_TYPE_SET, gint64(startMs) * GST_MSECOND,
+                     stopMs >= 0 ? GST_SEEK_TYPE_SET : GST_SEEK_TYPE_NONE,
+                     stopMs >= 0 ? gint64(stopMs) * GST_MSECOND : GST_CLOCK_TIME_NONE);
+}
+
+void Player::seek(qint64 ms)                // relative to the start of the track
 {
     if (!m_pipe || m_state == Stopped) return;
-    gst_element_seek_simple(m_pipe, GST_FORMAT_TIME,
-                           GstSeekFlags(GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE),
-                           ms * GST_MSECOND);
+    seekAbsolute(m_segStart + std::max<qint64>(0, ms), m_segStop);
 }
 
 void Player::setVolume(double v)
@@ -232,14 +269,19 @@ void Player::setVolume(double v)
 qint64 Player::position() const
 {
     gint64 pos = 0;
-    if (m_pipe && gst_element_query_position(m_pipe, GST_FORMAT_TIME, &pos)) return pos / GST_MSECOND;
-    return 0;
+    if (!m_pipe || !gst_element_query_position(m_pipe, GST_FORMAT_TIME, &pos)) return 0;
+    qint64 ms = qint64(pos / GST_MSECOND) - m_segStart;
+    if (ms < 0) ms = 0;
+    if (m_segStop >= 0) ms = std::min(ms, m_segStop - m_segStart);
+    return ms;
 }
 
 qint64 Player::duration() const
 {
+    if (m_segStop >= 0) return m_segStop - m_segStart;
     gint64 dur = 0;
-    if (m_pipe && gst_element_query_duration(m_pipe, GST_FORMAT_TIME, &dur)) return dur / GST_MSECOND;
+    if (m_pipe && gst_element_query_duration(m_pipe, GST_FORMAT_TIME, &dur))
+        return std::max<qint64>(0, qint64(dur / GST_MSECOND) - m_segStart);
     return 0;
 }
 
@@ -265,14 +307,24 @@ void Player::pollBus()
             break;
         }
         case GST_MESSAGE_ASYNC_DONE:
-            if (m_pendingSeek >= 0 && GST_MESSAGE_SRC(msg) == GST_OBJECT(m_pipe)) {
-                const qint64 ms = m_pendingSeek;
-                m_pendingSeek = -1;
-                seek(ms);
+            if (GST_MESSAGE_SRC(msg) == GST_OBJECT(m_pipe)) {
+                if (m_segPending) {                   // file prerolled: now jump to the track
+                    m_segPending = false;
+                    seekAbsolute(m_segStart, m_segStop);
+                    gst_element_set_state(m_pipe, m_state == Paused ? GST_STATE_PAUSED : GST_STATE_PLAYING);
+                } else if (m_pendingSeek >= 0) {
+                    const qint64 ms = m_pendingSeek;
+                    m_pendingSeek = -1;
+                    seek(ms);
+                }
             }
+            break;
+        case GST_MESSAGE_SEGMENT_DONE:                // end of a CUE track; the file stays open
+            if (GST_MESSAGE_SRC(msg) == GST_OBJECT(m_pipe)) emit endOfStream();
             break;
         case GST_MESSAGE_EOS:
             gst_element_set_state(m_pipe, GST_STATE_NULL);
+            m_active = false;
             setState(Stopped);
             emit endOfStream();
             break;
@@ -283,6 +335,8 @@ void Player::pollBus()
             if (err) g_error_free(err);
             g_free(dbg);
             gst_element_set_state(m_pipe, GST_STATE_NULL);
+            m_active = false;
+            m_segPending = false;
             setState(Stopped);
             break;
         }
