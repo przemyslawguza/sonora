@@ -79,7 +79,7 @@ Saved user settings override defaults: delete `~/.config/sonora/` to see new def
 
 ## Debian package (Debian 12 "bookworm" / 13 "trixie")
 
-    ./build-deb.sh            # -> ../sonora_0.3.3_<arch>.deb
+    ./build-deb.sh            # -> ../sonora_0.3.4_<arch>.deb
 
 No architecture-specific code: run the same command on an arm64 or amd64 machine / chroot / container
 (`sbuild`, `pbuilder`, or Docker `arm64v8/debian:12` with QEMU). Cross-compiling with
