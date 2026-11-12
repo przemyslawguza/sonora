@@ -1,3 +1,12 @@
+sonora (0.3.7) unstable; urgency=low
+
+  * Export playlist: M3U/M3U8 (UTF-8), PLS and XSPF; whole playlist, only the
+    entries shown (filter + sort order), only selected entries, or all
+    playlists into a folder; absolute or relative paths; optional track
+    information; cue sheets written as one .cue entry for other players.
+
+ -- Your Name <you@example.com>  Thu, 12 Nov 2026 18:00:00 +0100
+
 sonora (0.3.6) unstable; urgency=low
 
   * Fix: a playlist that contains only a .cue file (no separate FLAC entry)

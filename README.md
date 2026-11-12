@@ -63,6 +63,11 @@ Saved user settings override defaults: delete `~/.config/sonora/` to see new def
   sheet already splits is not listed a second time. Switching between tracks of one image does not re-open the file.
   The playlist may contain just the `.cue`: the audio file does not have to be listed.
   Not supported: a cue sheet embedded inside the FLAC (`CUESHEET` tag).
+* **Export** (File > Export Playlist…): M3U / M3U8 (UTF-8, with `#EXTINF`), PLS or XSPF; choose *what* - the whole
+  playlist, only the entries shown (filter and sort order are respected), only the selected entries, or all playlists
+  into a folder (one file each); *paths* absolute or relative to the exported file (portable); optional track
+  information. A cue sheet is written as one `.cue` entry, which other players expand themselves (switch it off to
+  get Sonora's own `file.cue#N` track entries). The last choices are remembered.
 * **Playlist columns**: title, artist, album, year, time, file type; right-click the header to show/hide columns,
   click it to sort (asc / desc / original). The filter also matches artist, album and year.
 * **Metadata tooltip** when the mouse rests on a track: artist, album artist, album, year, track/disc, genre, composer,
@@ -88,7 +93,7 @@ Saved user settings override defaults: delete `~/.config/sonora/` to see new def
 
 ## Debian package (Debian 12 "bookworm" / 13 "trixie")
 
-    ./build-deb.sh            # -> ../sonora_0.3.6_<arch>.deb
+    ./build-deb.sh            # -> ../sonora_0.3.7_<arch>.deb
 
 No architecture-specific code: run the same command on an arm64 or amd64 machine / chroot / container
 (`sbuild`, `pbuilder`, or Docker `arm64v8/debian:12` with QEMU). Cross-compiling with

@@ -20,6 +20,16 @@ public:
         qint64 stopMs = -1;         // < 0: until the end of the file
     };
 
+    // One entry as the exporter needs it (see PlaylistExporter).
+    struct ExportItem {
+        QUrl url;                   // as stored; CUE tracks: file:///dir/x.cue#N
+        QString path;               // local path (CUE tracks: the .cue file) or the text of a remote URL
+        bool isLocal = true;
+        bool isCue = false;
+        QString title, artist, album;
+        qint64 durationMs = -1;
+    };
+
     explicit PlaylistModel(QObject *parent = nullptr);
 
     int rowCount(const QModelIndex &parent = {}) const override;
@@ -37,6 +47,7 @@ public:
     void setCurrent(int row);
     QUrl urlAt(int row) const;
     PlayTarget playTarget(int row);
+    QList<ExportItem> exportItems(const QList<int> &sourceRows) const;
     QString titleAt(int row) const;
     TrackInfo infoAt(int row) const;
     qint64 totalDurationMs() const;                    // sum of the durations known so far

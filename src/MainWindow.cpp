@@ -1,6 +1,8 @@
 #include "MainWindow.h"
 #include "AudioOutput.h"
 #include "CueSheet.h"
+#include "ExportDialog.h"
+#include "PlaylistExporter.h"
 #include "LevelMeter.h"
 #include "MetadataLoader.h"
 #include "Mpris.h"
@@ -729,13 +731,95 @@ void MainWindow::importIntoCurrent()       // entries are appended to the visibl
     }
 }
 
+namespace {
+QString safeFileName(QString s)
+{
+    for (const QChar c : QStringLiteral("/\\:*?\"<>|")) s.replace(c, QLatin1Char('_'));
+    s = s.trimmed();
+    return s.isEmpty() ? QStringLiteral("playlist") : s;
+}
+}
+
 void MainWindow::exportPlaylist()
 {
-    const QString file = QFileDialog::getSaveFileName(this, tr("Export playlist"),
-                                                      m_tabs->tabText(m_tabs->currentIndex()) + ".m3u",
-                                                      tr("M3U playlist (*.m3u)"));
-    if (!file.isEmpty() && !current()->model()->saveM3U(file))
-        statusBar()->showMessage(tr("Cannot write %1").arg(file), 5000);
+    PlaylistWidget *w = current();
+    const QString name = m_tabs->tabText(m_tabs->currentIndex());
+    const int total = w->model()->rowCount();
+    const int shown = w->proxy()->rowCount();
+    const int selected = int(w->view()->selectionModel()->selectedRows().size());
+
+    ExportDialog dlg(name, total, shown, selected, m_tabs->count(), this);
+    if (dlg.exec() != QDialog::Accepted) return;
+    const PlaylistExporter::Options opt = dlg.options();
+    const QString ext = PlaylistExporter::suffix(opt.format);
+
+    // source rows of a playlist for the chosen scope (shown / selected: in the order you see)
+    auto rowsOf = [](PlaylistWidget *pw, ExportDialog::Scope scope) {
+        QList<int> rows;
+        if (scope == ExportDialog::Shown) {
+            for (int r = 0; r < pw->proxy()->rowCount(); ++r)
+                rows << pw->proxy()->mapToSource(pw->proxy()->index(r, 0)).row();
+        } else if (scope == ExportDialog::Selected) {
+            QModelIndexList sel = pw->view()->selectionModel()->selectedRows();
+            std::sort(sel.begin(), sel.end(), [](const QModelIndex &a, const QModelIndex &b) { return a.row() < b.row(); });
+            for (const QModelIndex &i : sel) rows << pw->proxy()->mapToSource(i).row();
+        } else {
+            for (int r = 0; r < pw->model()->rowCount(); ++r) rows << r;
+        }
+        return rows;
+    };
+
+    QSettings st;
+    const QString startDir = st.value("exportDir", QDir::homePath()).toString();
+
+    if (dlg.scope() == ExportDialog::AllPlaylists) {          // one file per playlist into a folder
+        const QString dir = QFileDialog::getExistingDirectory(this, tr("Export all playlists into folder"), startDir);
+        if (dir.isEmpty()) return;
+        QStringList files;
+        QSet<QString> used;
+        for (int i = 0; i < m_tabs->count(); ++i) {
+            const QString base = safeFileName(m_tabs->tabText(i));
+            QString file = QDir(dir).filePath(base + '.' + ext);
+            for (int n = 2; used.contains(file.toLower()); ++n)
+                file = QDir(dir).filePath(QStringLiteral("%1 (%2).%3").arg(base).arg(n).arg(ext));
+            used.insert(file.toLower());
+            files << file;
+        }
+        QStringList existing;
+        for (const QString &f : files) if (QFileInfo::exists(f)) existing << QFileInfo(f).fileName();
+        if (!existing.isEmpty() &&
+            QMessageBox::question(this, tr("Overwrite files?"),
+                tr("These files already exist and will be overwritten:\n\n%1").arg(existing.join('\n'))) != QMessageBox::Yes)
+            return;
+
+        int ok = 0;
+        QString err;
+        for (int i = 0; i < m_tabs->count(); ++i) {
+            PlaylistWidget *pw = playlistAt(i);
+            if (PlaylistExporter::write(files[i], pw->model()->exportItems(rowsOf(pw, ExportDialog::Whole)), opt, &err)) ++ok;
+            else statusBar()->showMessage(err, 8000);
+        }
+        st.setValue("exportDir", dir);
+        if (ok == m_tabs->count())
+            statusBar()->showMessage(tr("Exported %1 playlists to %2").arg(ok).arg(dir), 8000);
+        return;
+    }
+
+    QString file = QFileDialog::getSaveFileName(this, tr("Export playlist"),
+                       QDir(startDir).filePath(safeFileName(name) + '.' + ext),
+                       PlaylistExporter::fileFilter(opt.format));
+    if (file.isEmpty()) return;
+    if (QFileInfo(file).suffix().isEmpty()) file += '.' + ext;
+
+    const QList<PlaylistModel::ExportItem> items = w->model()->exportItems(rowsOf(w, dlg.scope()));
+    QString err;
+    if (PlaylistExporter::write(file, items, opt, &err)) {
+        st.setValue("exportDir", QFileInfo(file).absolutePath());
+        statusBar()->showMessage(tr("Exported %1 entries to %2").arg(items.size()).arg(file), 8000);
+    } else {
+        statusBar()->showMessage(err, 10000);
+        QMessageBox::warning(this, tr("Export failed"), err);
+    }
 }
 
 // ================================================================== playback

@@ -377,6 +377,27 @@ QUrl PlaylistModel::urlAt(int row) const
     return (row >= 0 && row < m_items.size()) ? m_items.at(row).url : QUrl();
 }
 
+QList<PlaylistModel::ExportItem> PlaylistModel::exportItems(const QList<int> &rows) const
+{
+    QList<ExportItem> out;
+    out.reserve(rows.size());
+    for (int r : rows) {
+        if (r < 0 || r >= m_items.size()) continue;
+        const Item &it = m_items.at(r);
+        ExportItem e;
+        e.url = it.url;
+        e.isLocal = it.url.isLocalFile();
+        e.path = e.isLocal ? it.path : it.url.toString();
+        e.isCue = it.isCue;
+        e.title = titleOf(it);
+        e.artist = it.info.artist;
+        e.album = it.info.album;
+        e.durationMs = it.info.durationMs;
+        out << e;
+    }
+    return out;
+}
+
 QString PlaylistModel::titleAt(int row) const
 {
     return (row >= 0 && row < m_items.size()) ? titleOf(m_items.at(row)) : QString();
