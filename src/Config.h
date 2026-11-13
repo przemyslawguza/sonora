@@ -37,13 +37,13 @@ struct AppConfig
     AudioOutputConfig audio;
     SpectrumConfig spectrum;
     MeterConfig meter;
-    int vizDelayMs = 0;           // ONE delay for level meters and spectrum analyser (sync with the sound)
+    int vizDelayMs = 0;           // fine-tuning (ms) for level meters AND spectrum; they are synchronised with the sound automatically
 
     void load(QSettings &s)
     {
         audio.load(s); spectrum.load(s); meter.load(s);
         const AppConfig d;                  // defaults live here only
-        vizDelayMs = std::clamp(s.value("visualisation/delayMs", d.vizDelayMs).toInt(), 0, 4000);
+        vizDelayMs = std::clamp(s.value("visualisation/delayMs", d.vizDelayMs).toInt(), -500, 4000);
     }
     void save(QSettings &s) const
     {

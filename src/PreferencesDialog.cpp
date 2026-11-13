@@ -152,17 +152,17 @@ PreferencesDialog::PreferencesDialog(const AppConfig &cfg, QWidget *parent) : QD
                            "A single LED marks the peak hold; overs are held longer.")));
 
     // ------------------------------------------------ Synchronisation (shared by meters + spectrum)
-    m_vizDelay = mkSpin(0, 4000, 10, tr(" ms"));
-    m_vizDelay->setSpecialValueText(tr("no delay"));
-    m_vizDelay->setToolTip(tr("Applied to the level meters and the spectrum analyser together."));
+    m_vizDelay = mkSpin(-500, 4000, 10, tr(" ms"));
+    m_vizDelay->setToolTip(tr("Applied to the level meters and the spectrum analyser together. Positive = pictures later, negative = earlier."));
     auto *viz = new QWidget;
     auto *vizForm = new QFormLayout(viz);
-    vizForm->addRow(tr("Delay of level meters and spectrum analyser:"), m_vizDelay);
-    vizForm->addRow(note(tr("The analysis sees the audio before the sound card plays it, so without a delay the "
-                            "pictures run ahead of what you hear (the output buffer adds roughly 50 – 300 ms, "
-                            "Bluetooth speakers much more). One delay is used for both displays, so they always "
-                            "stay in step with each other. Start with 100 – 200 ms and adjust until the "
-                            "meters match the beat.")));
+    vizForm->addRow(tr("Fine-tuning of level meters and spectrum analyser:"), m_vizDelay);
+    vizForm->addRow(note(tr("The level meters and the spectrum analyser are synchronised with the sound "
+                            "automatically: they follow the playback position of the sound card, whatever the "
+                            "buffering. 0 ms is right for most setups. Use this only for a remaining offset, "
+                            "e.g. Bluetooth speakers or an external amplifier that play later than the "
+                            "computer thinks (positive value = pictures later; negative = earlier). "
+                            "One value is used for both displays.")));
 
     auto *tabs = new QTabWidget;
     tabs->addTab(out, tr("Audio output"));

@@ -100,7 +100,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     // player -> shared delay line -> level meters and spectrum analyser (same delay for both)
     m_viz = new VizDelay(this);
-    m_viz->setDelayMs(m_cfg.vizDelayMs);
+    m_viz->setDelayMs(m_cfg.vizDelayMs);                      // fine-tuning only: sync is automatic
+    m_viz->setPositionProvider([this] { return m_player->rawPosition(); });
+    connect(m_player, &Player::flushed, m_viz, &VizDelay::clear);
     connect(m_player, &Player::levels, m_viz, &VizDelay::pushLevels);
     connect(m_player, &Player::spectrum, m_viz, &VizDelay::pushSpectrum);
     connect(m_viz, &VizDelay::levels, m_meter, &LevelMeter::setLevels);

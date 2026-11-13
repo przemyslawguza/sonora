@@ -1,69 +1,77 @@
 #include "VizDelay.h"
 #include <algorithm>
 
+namespace {
+constexpr qint64 kMaxHoldMs = 8000;         // safety: nothing is held longer than this (+ the delay)
+}
+
 VizDelay::VizDelay(QObject *parent) : QObject(parent)
 {
     m_clock.start();
-    m_timer.setInterval(5);
+    m_timer.setInterval(8);
     connect(&m_timer, &QTimer::timeout, this, &VizDelay::pump);
 }
 
 void VizDelay::setDelayMs(int ms)
 {
-    m_delay = std::clamp(ms, 0, 5000);
-    if (m_delay == 0) {                     // delay switched off: release what is waiting right now
-        std::deque<Item> rest;
-        rest.swap(m_queue);
-        for (const Item &it : rest) emitItem(it);
-        m_timer.stop();
-    }
+    m_delay = std::clamp(ms, -500, 4000);
 }
 
-void VizDelay::emitItem(const Item &it)
+bool VizDelay::isDue(const Item &it, qint64 now, qint64 pos) const
 {
-    if (it.isSpectrum) emit spectrum(it.mag, it.rate);
-    else               emit levels(it.peak, it.rms);
+    if (now - it.arrived > kMaxHoldMs + std::max(0, m_delay)) return true;
+    if (it.streamMs < 0 || pos < 0)                          // no timestamp / no position: plain delay
+        return now - it.arrived >= std::max(0, m_delay);
+    return it.streamMs <= pos - m_delay;                     // the sound has reached this moment
 }
 
-void VizDelay::enqueue(Item &&it)
+void VizDelay::enqueue(std::deque<Item> &q, Item &&it)
 {
-    it.due = m_clock.elapsed() + m_delay;
-    m_queue.push_back(std::move(it));
+    it.arrived = m_clock.elapsed();
+    q.push_back(std::move(it));
     if (!m_timer.isActive()) m_timer.start();
 }
 
-void VizDelay::pushLevels(const QVector<double> &peak, const QVector<double> &rms)
+void VizDelay::pushLevels(const QVector<double> &peak, const QVector<double> &rms, qint64 streamMs)
 {
-    if (m_delay <= 0) { emit levels(peak, rms); return; }
+    if (streamMs < 0 && m_delay <= 0) { emit levels(peak, rms); return; }
     Item it;
+    it.streamMs = streamMs;
     it.peak = peak;
     it.rms = rms;
-    enqueue(std::move(it));
+    enqueue(m_levels, std::move(it));
 }
 
-void VizDelay::pushSpectrum(const QVector<float> &mag, int rate)
+void VizDelay::pushSpectrum(const QVector<float> &mag, int rate, qint64 streamMs)
 {
-    if (m_delay <= 0) { emit spectrum(mag, rate); return; }
+    if (streamMs < 0 && m_delay <= 0) { emit spectrum(mag, rate); return; }
     Item it;
-    it.isSpectrum = true;
+    it.streamMs = streamMs;
     it.mag = mag;
     it.rate = rate;
-    enqueue(std::move(it));
+    enqueue(m_spectra, std::move(it));
 }
 
 void VizDelay::clear()
 {
-    m_queue.clear();
+    m_levels.clear();
+    m_spectra.clear();
     m_timer.stop();
 }
 
 void VizDelay::pump()
 {
     const qint64 now = m_clock.elapsed();
-    while (!m_queue.empty() && m_queue.front().due <= now) {
-        const Item it = std::move(m_queue.front());     // copy out first: a slot may call clear()
-        m_queue.pop_front();
-        emitItem(it);
+    const qint64 pos = m_pos ? m_pos() : -1;
+    while (!m_levels.empty() && isDue(m_levels.front(), now, pos)) {
+        const Item it = std::move(m_levels.front());         // copy out first: a slot may call clear()
+        m_levels.pop_front();
+        emit levels(it.peak, it.rms);
     }
-    if (m_queue.empty()) m_timer.stop();
+    while (!m_spectra.empty() && isDue(m_spectra.front(), now, pos)) {
+        const Item it = std::move(m_spectra.front());
+        m_spectra.pop_front();
+        emit spectrum(it.mag, it.rate);
+    }
+    if (m_levels.empty() && m_spectra.empty()) m_timer.stop();
 }

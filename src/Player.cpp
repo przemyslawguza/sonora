@@ -100,10 +100,7 @@ bool Player::ensurePipeline()
 
     g_object_set(m_pipe, "volume", m_volume, nullptr);
 
-    QString outErr;                                            // chosen sound service / device
-    GstElement *sink = AudioOutput::createSink(m_outCfg, &outErr);
-    g_object_set(m_pipe, "audio-sink", sink, nullptr);
-    if (!outErr.isEmpty()) emit outputProblem(outErr);
+    installSink(m_outCfg);                                     // chosen sound service / device
     return true;
 }
 
@@ -112,8 +109,24 @@ Player::~Player()
     if (m_pipe) {
         gst_element_set_state(m_pipe, GST_STATE_NULL);
         if (m_spec) gst_object_unref(m_spec);
+        if (m_audioSink) gst_object_unref(m_audioSink);
         gst_object_unref(m_pipe);
     }
+}
+
+// The audio sink is always created here (for "automatic": an autoaudiosink) so that we keep a
+// handle to it: its position query tells what is being played. The pipeline's own position is
+// the MAXIMUM over all sinks, and the unthrottled sink of the true-peak branch is always ~2 s ahead.
+void Player::installSink(const AudioOutputConfig &cfg)
+{
+    QString err;
+    GstElement *sink = AudioOutput::createSink(cfg, &err);     // nullptr = automatic
+    if (!sink) sink = gst_element_factory_make("autoaudiosink", "audiosink");
+    if (sink) gst_object_ref_sink(sink);                       // our reference; playbin takes its own
+    g_object_set(m_pipe, "audio-sink", sink, nullptr);
+    if (m_audioSink) gst_object_unref(m_audioSink);
+    m_audioSink = sink;
+    if (!err.isEmpty()) emit outputProblem(err);
 }
 
 void Player::setState(State s)
@@ -167,10 +180,8 @@ void Player::setOutput(const AudioOutputConfig &cfg)
     if (m_active) { gst_element_set_state(m_pipe, GST_STATE_NULL); m_active = false; }
     m_pendingStart = false;
 
-    QString err;
-    GstElement *sink = AudioOutput::createSink(cfg, &err);    // nullptr = automatic
-    g_object_set(m_pipe, "audio-sink", sink, nullptr);
-    if (!err.isEmpty()) emit outputProblem(err);
+    installSink(cfg);
+    emit flushed();
 
     if (prev != Stopped) {                                    // re-open with the new sink, resume where we were
         drainBus();
@@ -190,6 +201,7 @@ void Player::play(const QUrl &url, qint64 startMs, qint64 stopMs)
     const bool segment = startMs >= 0;                        // a track of a CUE-sheet image
     m_rate = 0;
     m_pendingStart = false;
+    emit flushed();
     if (m_spec) g_object_set(m_spec, "bands", guint(m_specBands), nullptr);
     DBG("play" << url.fileName() << "start" << startMs << "stop" << stopMs << "fast-path-possible"
         << (segment && m_active && uri == m_uri));
@@ -270,7 +282,8 @@ void Player::stop()
 }
 
 // Absolute position in the file. Verified with GStreamer 1.x / playbin:
-//  * no SEGMENT flag: the end of the range arrives as a normal EOS (SEGMENT_DONE is never delivered);
+//  * no SEGMENT flag: the end of the range arrives as a normal EOS, when the sound has really ended
+//    (SEGMENT_DONE is posted when the data reaches the sink, up to ~1.2 s before it is played);
 //  * the stop is always SET (-1 = until the end of the file): "NONE" would keep the previous track's stop.
 bool Player::seekAbsolute(qint64 startMs, qint64 stopMs)
 {
@@ -279,6 +292,7 @@ bool Player::seekAbsolute(qint64 startMs, qint64 stopMs)
                                          GST_SEEK_TYPE_SET, gint64(startMs) * GST_MSECOND,
                                          GST_SEEK_TYPE_SET, stopMs >= 0 ? gint64(stopMs) * GST_MSECOND : gint64(-1));
     DBG("seek" << startMs << "->" << stopMs << (ok ? "ok" : "REFUSED"));
+    emit flushed();                                            // queued meter/spectrum data is obsolete
     return ok;
 }
 
@@ -294,11 +308,21 @@ void Player::setVolume(double v)
     if (m_pipe) g_object_set(m_pipe, "volume", v, nullptr);
 }
 
-qint64 Player::position() const
+qint64 Player::rawPosition() const
 {
     gint64 pos = 0;
-    if (!m_pipe || !gst_element_query_position(m_pipe, GST_FORMAT_TIME, &pos)) return 0;
-    qint64 ms = qint64(pos / GST_MSECOND) - m_segStart;
+    if (m_audioSink && gst_element_query_position(m_audioSink, GST_FORMAT_TIME, &pos) && pos >= 0)
+        return qint64(pos / GST_MSECOND);
+    if (m_pipe && gst_element_query_position(m_pipe, GST_FORMAT_TIME, &pos) && pos >= 0)
+        return qint64(pos / GST_MSECOND);                       // fallback (sink not answering yet)
+    return -1;
+}
+
+qint64 Player::position() const
+{
+    const qint64 raw = rawPosition();
+    if (raw < 0) return 0;
+    qint64 ms = raw - m_segStart;
     if (ms < 0) ms = 0;
     if (m_segStop >= 0) ms = std::min(ms, m_segStop - m_segStart);
     return ms;
@@ -340,15 +364,20 @@ void Player::pollBus()
         case GST_MESSAGE_ELEMENT: {
             const GstStructure *s = gst_message_get_structure(msg);
             if (!s || m_state != Playing) break;
+            // stream time of the audio this result describes (middle of its interval)
+            guint64 st = 0, du = 0;
+            const bool hasT = gst_structure_get_uint64(s, "stream-time", &st);
+            gst_structure_get_uint64(s, "duration", &du);
+            const qint64 streamMs = hasT ? qint64((st + du / 2) / GST_MSECOND) : -1;
             if (gst_structure_has_name(s, "level")) {
                 const QByteArray src = GST_MESSAGE_SRC(msg) ? QByteArray(GST_OBJECT_NAME(GST_MESSAGE_SRC(msg)))
                                                             : QByteArray();
                 const bool wantTp = m_truePeak && m_haveTp;
                 if ((src == "tp") == wantTp)          // only the selected measurement drives the meter
-                    emit levels(readDbArray(s, "peak"), readDbArray(s, "rms"));
+                    emit levels(readDbArray(s, "peak"), readDbArray(s, "rms"), streamMs);
             } else if (gst_structure_has_name(s, "spectrum")) {
                 const QVector<float> mag = readMagnitudes(s);
-                if (!mag.isEmpty()) emit spectrum(mag, sampleRate());
+                if (!mag.isEmpty()) emit spectrum(mag, sampleRate(), streamMs);
             }
             break;
         }

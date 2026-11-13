@@ -20,7 +20,8 @@ public:
     ~Player() override;
 
     State state() const { return m_state; }
-    qint64 position() const;   // ms
+    qint64 position() const;   // ms, relative to the track
+    qint64 rawPosition() const;// ms in the file, taken from the AUDIO SINK (= what is being played); -1 if unknown
     qint64 duration() const;   // ms
 
 public slots:
@@ -38,8 +39,11 @@ public slots:
     void setTruePeak(bool on);              // meter shows inter-sample (true) peaks
 
 signals:
-    void levels(const QVector<double> &peakDb, const QVector<double> &rmsDb);
-    void spectrum(const QVector<float> &magnitudeDb, int sampleRate);
+    // streamMs: stream time of the audio the result describes (-1 = unknown). The results arrive
+    // long before that audio is played; see VizDelay.
+    void levels(const QVector<double> &peakDb, const QVector<double> &rmsDb, qint64 streamMs);
+    void spectrum(const QVector<float> &magnitudeDb, int sampleRate, qint64 streamMs);
+    void flushed();                         // seek / new track / output change: queued visual data is obsolete
     void stateChanged(Player::State s);
     void endOfStream();
     void errorMessage(const QString &msg);      // playback problem
@@ -54,10 +58,12 @@ private:
     void drainBus();
     bool seekAbsolute(qint64 startMs, qint64 stopMs);
     void startPending();
+    void installSink(const AudioOutputConfig &cfg);
     bool ensurePipeline();                  // plugins are loaded only when first needed
 
     GstElement *m_pipe = nullptr;
     GstElement *m_spec = nullptr;
+    GstElement *m_audioSink = nullptr;      // our own reference: its position is the playback position
     int m_rate = 0;
     int m_specBands = 2048;
     bool m_truePeak = true;
@@ -68,7 +74,7 @@ private:
     qint64 m_segStart = 0, m_segStop = -1;
     bool m_segMode = false;                 // the open file is played as CUE tracks (kept open at EOS)
     bool m_active = false;                  // pipeline is open (PAUSED/PLAYING) with m_uri
-    // The file is opened in PAUSED; when it is prerolled (polled - playbin does not deliver ASYNC_DONE
+    // The file is opened in PAUSED; when it is prerolled (polled, so the start does not depend on a bus message
     // to a polling application) we seek to the start position and go on playing.
     bool m_pendingStart = false;
     qint64 m_pendStartMs = 0, m_pendStopMs = -1;

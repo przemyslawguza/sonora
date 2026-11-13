@@ -1,3 +1,17 @@
+sonora (0.3.8) unstable; urgency=low
+
+  * Meters and spectrum are synchronised with the sound automatically: results
+    carry the stream time of the audio and are released when the audio sink
+    has played up to it (the analysis runs 1.3 s / 2.3 s for the true-peak
+    branch ahead of the sound, which is why ~2200 ms had to be entered).
+    The delay setting is now a fine-tuning offset, -500 ... 4000 ms.
+  * Fix: the time display and seek bar used the pipeline position, which is
+    the maximum over all sinks and was ~2.3 s ahead of the sound because of the
+    unthrottled sink of the true-peak branch; the audio sink's position is
+    used now.
+
+ -- Your Name <you@example.com>  Fri, 13 Nov 2026 12:00:00 +0100
+
 sonora (0.3.7) unstable; urgency=low
 
   * Export playlist: M3U/M3U8 (UTF-8), PLS and XSPF; whole playlist, only the
@@ -9,17 +23,20 @@ sonora (0.3.7) unstable; urgency=low
 
 sonora (0.3.6) unstable; urgency=low
 
-  * Fix: a playlist that contains only a .cue file (no separate FLAC entry)
-    hung when a track was started: the player waited for ASYNC_DONE, which
-    playbin does not deliver to a polling application. The file is now
-    opened in PAUSED and the pre-roll is polled, then the track is sought.
-  * Fix: tracks of a cue sheet end with EOS at the right position (SEGMENT_DONE
-    is never delivered); the stop position is always set, so the last track
-    no longer ends immediately; same fix for resuming after a sound-service
-    change.
-  * Safety: playback stops when 8 tracks end within a second; open timeout.
+  * Fix: tracks of a cue sheet. The old code ended a track with SEGMENT_DONE,
+    which GStreamer posts when the data reaches the sink (up to ~1.2 s before
+    the sound is played), so tracks were cut short and chained through the
+    album within seconds; the last track inherited the stop position of the
+    previous one and ended immediately. Tracks now end with a normal EOS
+    (when the sound really ends) and the stop position is always set. The
+    exact cause of the reported hang when starting a cue-only playlist could
+    not be reproduced; the start no longer depends on a bus message (the
+    pre-roll is polled, with a timeout) and playback stops when 8 tracks end
+    within a second.
+  * Resuming at the same position after a sound-service change uses the same
+    polling.
   * Cue sheets with full Windows paths are resolved by file name.
-  * SONORA_DEBUG=1 prints player events (open, pre-roll, seek, EOS, errors).
+  * SONORA_DEBUG=1 prints player events.
 
  -- Your Name <you@example.com>  Thu, 12 Nov 2026 15:00:00 +0100
 

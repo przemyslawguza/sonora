@@ -35,7 +35,7 @@ Preferences texts are generated from them).
 |---|---|
 | Spectrum analyser | 0 - 22 kHz linear, 224 bars, 4096 FFT bands, display -60 ... -20 dB |
 | Level meters | -60 ... +1 dB, 0.33 dB per LED (about 186 LEDs), 10 px per channel, true-peak on |
-| Meter / spectrum delay | 0 ms (one shared setting, Preferences > *Synchronisation*) |
+| Meter / spectrum fine-tuning | 0 ms (one shared setting; synchronisation with the sound is automatic) |
 
 Saved user settings override defaults: delete `~/.config/sonora/` to see new defaults.
 
@@ -52,9 +52,11 @@ Saved user settings override defaults: delete `~/.config/sonora/` to see new def
 * **True-peak (inter-sample) metering**: the meter measures a copy of the signal oversampled to 192 kHz (at least 4x
   for 44.1/48 kHz material, as in ITU-R BS.1770), so the red LED lights when the waveform between two samples goes
   above 0 dB. Switch in Preferences > Level meters.
-* **Synchronisation delay**: a single delay (0 - 4000 ms, Preferences > *Synchronisation*) applied to the level meters
-  *and* the spectrum analyser together, to compensate the sound card / Bluetooth output latency so the pictures match
-  what you hear. It can be changed while playing.
+* **Meters and spectrum follow the sound**: every analysis result carries the stream time of the audio it describes
+  and is shown when the audio sink has played up to that moment, so the pictures match what you hear whatever the
+  buffering (the raw analysis runs 1.3 - 2.3 s ahead of the sound). Preferences > *Synchronisation* has one
+  fine-tuning offset (-500 ... +4000 ms, default 0) for both displays, for devices that play later than the computer
+  thinks (Bluetooth, external amplifier). The time display and seek bar use the same real playback position.
 * **CUE sheets** (`.cue` + FLAC / APE / WavPack / WAV / MP3 ... image): add the `.cue` (Add Files, drag & drop, a folder,
   or an M3U that lists it) and every track becomes its own playlist entry with title, artist, album, year and genre
   from the sheet; time, seeking and the length of the last track are per track. The audio file is found even when the
@@ -93,7 +95,7 @@ Saved user settings override defaults: delete `~/.config/sonora/` to see new def
 
 ## Debian package (Debian 12 "bookworm" / 13 "trixie")
 
-    ./build-deb.sh            # -> ../sonora_0.3.7_<arch>.deb
+    ./build-deb.sh            # -> ../sonora_0.3.8_<arch>.deb
 
 No architecture-specific code: run the same command on an arm64 or amd64 machine / chroot / container
 (`sbuild`, `pbuilder`, or Docker `arm64v8/debian:12` with QEMU). Cross-compiling with
